@@ -1,3 +1,30 @@
+# Install Dependencies
+
+## Ubuntu
+
+Install these packages:
+
+```
+sudo apt install exuberant-ctags <--- Making tags is integral to my build flow
+sudo apt install cscope <------------ Like tags but better but only for C
+sudo apt install pkgconf <----------- let Make figure out the --cflags and --libs
+sudo apt install make <-------------- build stuff
+```
+
+Specific to SDL2, this is the essential package::
+
+```
+sudo apt install libsdl2-dev <--------- base
+```
+
+These are not required but will make some work easier:
+
+```
+sudo apt install libsdl2-mixer-dev <--- easier audio
+sudo apt install libsdl2-image-dev <--- work with other image formats
+sudo apt install libsdl2-ttf-dev <----- easier font rendering
+```
+
 # Makefile
 
 I start with the Makefile. It *can be* very simple if I keep the

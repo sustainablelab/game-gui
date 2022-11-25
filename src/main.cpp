@@ -72,6 +72,7 @@ int main(int argc, char* argv[])
         /////
         // UI
         /////
+        SDL_Keymod kmod = SDL_GetModState();            // Check for modifier keys
         SDL_Event e; while(  SDL_PollEvent(&e)  )       // Handle the event queue
         { // See tag SDL_EventType
 
@@ -102,9 +103,10 @@ int main(int argc, char* argv[])
                     case SDLK_q: quit = true; break;    // q : quit
 
                     case SDLK_SPACE:                    // Space : change colors
-                         Colors::next(bgnd_color);
-                         fgnd_color = Colors::contrasts(bgnd_color);
-                         break;
+                        if(  kmod&KMOD_SHIFT  ) Colors::prev(bgnd_color);
+                        else                    Colors::next(bgnd_color);
+                        fgnd_color = Colors::contrasts(bgnd_color);
+                        break;
 
                     default: break;
                 }

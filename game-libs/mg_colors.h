@@ -78,37 +78,42 @@ namespace Colors
         index++;
         if (index >= count) index = 0;
     }
+    void prev(int& index)
+    {
+        if (index == 0) index = count;
+        index--;
+    }
 
     int contrasts(int index)
     { // Return the index of the contrasting color
 
         switch(index)
         {
-            case 0: return 1;
-            case 1: return 0;
-            case 2: return 1;
-            case 3: return 1;
-            case 4: return 1;
-            case 5: return 1;
-            case 6: return 0;
-            case 7: return 0;
-            case 8: return 0;
-            case 9: return 0;
-            case 10: return 0;
-            case 11: return 0;
-            case 12: return 1;
-            case 13: return 1;
-            case 14: return 1;
-            case 15: return 1;
-            case 17: return 0;
-            case 18: return 1;
-            case 19: return 1;
-            case 20: return 1;
-            case 21: return 1;
-            case 22: return 0;
+            case  0: return 1;                          // coal on snow
+            case  1: return 0;                          // snow on coal
+            case  2: return 1;                          // coal on plain
+            case  3: return 1;                          // coal on brightgravel
+            case  4: return 1;                          // coal on lightgravel
+            case  5: return 1;                          // coal on gravel
+            case  6: return 0;                          // snow on mediumgravel
+            case  7: return 0;                          // snow on deepgravel
+            case  8: return 0;                          // snow on deepergravel
+            case  9: return 0;                          // snow on darkgravel
+            case 10: return 0;                          // snow on blackgravel
+            case 11: return 0;                          // snow on blackestgravel
+            case 12: return 1;           /*>^.^<*/      // coal on dalespale
+            case 13: return 1;                          // coal on dirtyblonde
+            case 14: return 0;                          // snow on taffy
+            case 15: return 1;                          // coal on saltwatertaffy
+            case 16: return 0;           /*>^.^<*/      // snow on tardis
+            case 17: return 1;                          // coal on orange
+            case 18: return 1;                          // coal on lime
+            case 19: return 1;                          // coal on dress
+            case 20: return 1;                          // coal on toffee
+            case 21: return 0;                          // snow on coffee
+            case 22: return 0;                          // snow on darkroast
             default: return 1;
         }
-        return index+1;
     }
 }
 

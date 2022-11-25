@@ -25,6 +25,31 @@ sudo apt install libsdl2-image-dev <--- work with other image formats
 sudo apt install libsdl2-ttf-dev <----- easier font rendering
 ```
 
+# Basic build and run
+
+Build:
+
+```
+make
+```
+
+Run:
+
+```
+. build/main
+```
+
+*Expect a simple rectangle in a window.*
+
+Cycle through 23 color schemes:
+
+- `Space` cycle forward
+- `Shift-Space` cycle backward
+
+Quit:
+
+- `q`
+
 # Makefile
 
 I start with the Makefile. It *can be* very simple if I keep the

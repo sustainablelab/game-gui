@@ -71,6 +71,11 @@ namespace Colors
                                 coffee,
                                 darkroast,
                             };
+    enum
+    {
+        SNOW,
+        COAL
+    };
 
     constexpr int count = sizeof(list)/sizeof(SDL_Color);
     void next(int& index)
@@ -95,7 +100,7 @@ namespace Colors
             case  3: return 1;                          // coal on brightgravel
             case  4: return 1;                          // coal on lightgravel
             case  5: return 1;                          // coal on gravel
-            case  6: return 0;                          // snow on mediumgravel
+            case  6: return 0;           /*>^.^<*/      // snow on mediumgravel
             case  7: return 0;                          // snow on deepgravel
             case  8: return 0;                          // snow on deepergravel
             case  9: return 0;                          // snow on darkgravel

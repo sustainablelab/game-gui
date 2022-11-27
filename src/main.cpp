@@ -241,6 +241,7 @@ int main(int argc, char* argv[])
     int fgnd_color=Colors::contrasts(bgnd_color);       // Pick a nice foreground
 
     bool quit = false;                                  // quit : true ends game
+    bool is_fullscreen = false;                         // Fullscreen vs windowed
     // Must initialize bool as true or false to avoid garbage!
     // I use {} (the default initializer) to imply any valid initial value is OK.
     bool show_overlay{};                                // Help on/off
@@ -282,6 +283,19 @@ int main(int argc, char* argv[])
                 { // See tag SDL_KeyCode
 
                     case SDLK_q: quit = true; break;    // q : quit
+                    case SDLK_F11:                      // F11 : toggle fullscreen
+                        is_fullscreen = !is_fullscreen;
+                        if (is_fullscreen)
+                        { // Go fullscreen
+                            SDL_SetWindowFullscreen(win, SDL_WINDOW_FULLSCREEN);
+                        }
+                        else
+                        { // Go back to windowed
+                            SDL_SetWindowFullscreen(win, 0);
+                        }
+                        // Update state with latest window info
+                        SDL_GetWindowSize(win, &(wI.w), &(wI.h));
+                        break;
 
                     case SDLK_SPACE:                    // Space : change colors
                         if(  kmod&KMOD_SHIFT  ) Colors::prev(bgnd_color);

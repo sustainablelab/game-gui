@@ -213,6 +213,10 @@ void shutdown(void)
 
 int main(int argc, char* argv[])
 {
+    ////////
+    // SETUP
+    ////////
+
     WindowInfo wI(argc, argv);
     if (DEBUG) printf("Window info: %d x %d at %d,%d\n", wI.w, wI.h, wI.x, wI.y);
     if (DEBUG) printf("Number of colors: %ld\n", sizeof(Colors::list)/sizeof(SDL_Color));
@@ -229,10 +233,21 @@ int main(int argc, char* argv[])
         SDL_SetRenderDrawBlendMode(ren, SDL_BLENDMODE_BLEND); // Draw with alpha
     }
 
-    int bgnd_color=6;                                   // Index into Colors::list
+    /////////////////////
+    // INITIAL GAME STATE
+    /////////////////////
+
+    int bgnd_color=Colors::MEDIUMGRAVEL;                // Index into Colors::list
     int fgnd_color=Colors::contrasts(bgnd_color);       // Pick a nice foreground
-    bool show_overlay;                                  // Help on/off
-    bool quit = false;
+
+    bool quit = false;                                  // quit : true ends game
+    // Must initialize bool as true or false to avoid garbage!
+    // I use {} (the default initializer) to imply any valid initial value is OK.
+    bool show_overlay{};                                // Help on/off
+
+    ///////
+    // LOOP
+    ///////
     while (!quit)
     {
         /////

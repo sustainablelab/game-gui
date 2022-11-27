@@ -74,7 +74,28 @@ namespace Colors
     enum
     {
         SNOW,
-        COAL
+        COAL,
+        PLAIN,
+        BRIGHTGRAVEL,
+        LIGHTGRAVEL,
+        GRAVEL,
+        MEDIUMGRAVEL,
+        DEEPGRAVEL,
+        DEEPERGRAVEL,
+        DARKGRAVEL,
+        BLACKGRAVEL,
+        BLACKESTGRAVEL,
+        DALESPALE,
+        DIRTYBLONDE,
+        TAFFY,
+        SALTWATERTAFFY,
+        TARDIS,
+        ORANGE,
+        LIME,
+        DRESS,
+        TOFFEE,
+        COFFEE,
+        DARKROAST,
     };
 
     constexpr int count = sizeof(list)/sizeof(SDL_Color);
@@ -92,32 +113,34 @@ namespace Colors
     int contrasts(int index)
     { // Return the index of the contrasting color
 
+        constexpr int A_DARK  = DARKGRAVEL;
+        constexpr int A_LIGHT = PLAIN;
         switch(index)
         {
-            case  0: return 1;                          // coal on snow
-            case  1: return 0;                          // snow on coal
-            case  2: return 1;                          // coal on plain
-            case  3: return 1;                          // coal on brightgravel
-            case  4: return 1;                          // coal on lightgravel
-            case  5: return 1;                          // coal on gravel
-            case  6: return 0;           /*>^.^<*/      // snow on mediumgravel
-            case  7: return 0;                          // snow on deepgravel
-            case  8: return 0;                          // snow on deepergravel
-            case  9: return 0;                          // snow on darkgravel
-            case 10: return 0;                          // snow on blackgravel
-            case 11: return 0;                          // snow on blackestgravel
-            case 12: return 1;           /*>^.^<*/      // coal on dalespale
-            case 13: return 1;                          // coal on dirtyblonde
-            case 14: return 0;                          // snow on taffy
-            case 15: return 1;                          // coal on saltwatertaffy
-            case 16: return 0;           /*>^.^<*/      // snow on tardis
-            case 17: return 1;                          // coal on orange
-            case 18: return 1;                          // coal on lime
-            case 19: return 1;                          // coal on dress
-            case 20: return 1;                          // coal on toffee
-            case 21: return 0;                          // snow on coffee
-            case 22: return 0;                          // snow on darkroast
-            default: return 1;
+            case SNOW:              return A_DARK;
+            case COAL:              return A_LIGHT;
+            case PLAIN:             return A_DARK;
+            case BRIGHTGRAVEL:      return A_DARK;
+            case LIGHTGRAVEL:       return A_DARK;
+            case GRAVEL:            return A_DARK;
+            case MEDIUMGRAVEL:      return A_LIGHT;     // >^.^<
+            case DEEPGRAVEL:        return A_LIGHT;
+            case DEEPERGRAVEL:      return A_LIGHT;
+            case DARKGRAVEL:        return A_LIGHT;
+            case BLACKGRAVEL:       return A_LIGHT;
+            case BLACKESTGRAVEL:    return A_LIGHT;
+            case DALESPALE:         return A_DARK;      // >^.^<
+            case DIRTYBLONDE:       return A_DARK;
+            case TAFFY:             return A_LIGHT;
+            case SALTWATERTAFFY:    return A_DARK;
+            case TARDIS:            return A_LIGHT;     // >^.^<
+            case ORANGE:            return A_DARK;
+            case LIME:              return A_DARK;
+            case DRESS:             return A_DARK;
+            case TOFFEE:            return A_DARK;
+            case COFFEE:            return A_LIGHT;
+            case DARKROAST:         return A_LIGHT;
+            default:                return A_DARK;
         }
     }
 }

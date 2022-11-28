@@ -167,9 +167,12 @@
 
 namespace GameArt
 {
-    constexpr int scale = 20;                           // 320:180 = 20*(16:9)
-    constexpr SDL_Rect rect = {.x=0, .y=0, .w=scale*16, .h=scale*9}; // 16:9 aspect ratio
-    SDL_Texture* tex;
+                                                        //      scale -----  Try scale=10, 20, 30, etc.
+                                                        //                |
+                                                        //                v
+    constexpr int scale = 50;                           // Ex: 320:180 = 20*(16:9)
+    constexpr SDL_Rect rect = {.x=0, .y=0, .w=scale*16, .h=scale*9}; // Game art has a 16:9 aspect ratio
+    SDL_Texture* tex;                                   // Render game art to this texture
 }
 
 SDL_Rect center_src_in_win(const SDL_Rect& winrect, const SDL_Rect& srcrect)
@@ -230,8 +233,8 @@ WindowInfo::WindowInfo(int argc, char* argv[])
     // Set defaults
     x = 50;                                             // Default x
     y = 50;                                             // Default y
-    w = 2*320;                                          // Default w
-    h = 2*180;                                          // Default h
+    w = 2*GameArt::rect.w;                              // Default w
+    h = 2*GameArt::rect.h;                              // Default h
 
     // Overwrite with values, if provided
     if(argc>1) x = atoi(argv[1]);
@@ -410,7 +413,8 @@ int main(int argc, char* argv[])
             for(int i=0; i<Colors::count; i++)
             {
                 SDL_Color c = Colors::list[i];
-                constexpr int COUNT = 1<<8;
+                
+                constexpr int COUNT = (1<<6) * GameArt::scale*GameArt::scale/100;
                 SDL_FPoint points[COUNT];
                 for(int i=0; i<COUNT; i++)
                 {

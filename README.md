@@ -50,6 +50,32 @@ Quit:
 
 - `q`
 
+Toggle fullscreen:
+
+- `F11`
+
+Resize the window to see game art resizing behavior. Game art
+maintains constant 16:9 aspect ratio, but pixel size increases,
+creating a chunky pixel effect. 
+
+As OS window is dragged to larger sizes, area occupied by game
+art increases to the largest integer multiple of the game art
+that still fits.
+
+Game art clips starting at lower right if OS window is dragged to
+a size smaller than the size where game art still fits.
+
+Also play with `GameArt::scale` by editing the code. Here are
+some example values:
+
+- `scale=10` (160x90) : very chunky pixels
+- `scale=20` (320x180) : balance between chunkiness and resolution
+- `scale=50` (800x450) : game art loses all chunky pixel feel, even at fullscreen
+
+The rainbow-colored static animation bases the number of points
+on this `scale` so the animation has a consistent density at the
+different game scales.
+
 # Makefile
 
 I start with the Makefile. It *can be* very simple if I keep the

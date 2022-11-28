@@ -162,6 +162,57 @@
 #include <cstdio>
 #include <SDL.h>
 #include "mg_colors.h"
+#include <chrono>
+#include <cassert>
+
+namespace GameArt
+{
+    constexpr int scale = 20;                           // 320:180 = 20*(16:9)
+    constexpr SDL_Rect rect = {.x=0, .y=0, .w=scale*16, .h=scale*9}; // 16:9 aspect ratio
+    SDL_Texture* tex;
+}
+
+SDL_Rect center_src_in_win(const SDL_Rect& winrect, const SDL_Rect& srcrect)
+{
+    return SDL_Rect {
+        .x=(winrect.w - srcrect.w)/2,
+        .y=(winrect.h - srcrect.h)/2,
+        .w=srcrect.w, .h = srcrect.h};
+}
+
+SDL_Rect scale_src_to_win(const SDL_Rect& winrect, const SDL_Rect& srcrect)
+{
+    /* *************DOC***************
+     * Return srcrect centered and scaled up to best fit in the winrect.
+     *
+     * - scale up srcrect without getting too big to fit
+     * - maintain an integer scaling factor (avoids visual artifacts)
+     *
+     * If winrect is smaller than srcrect, do not scale down, just clip
+     * srcrect to fit in winrect.
+     *
+     * Parameters
+     * ------------
+     * winrect : SDL_Rect window created by the OS
+     * srcrect : SDL_Rect texture with game artwork
+     * *******************************/
+
+    // Find ratios for width and height of OS window to game art
+    int ratio_w = winrect.w/srcrect.w;
+    int ratio_h = winrect.h/srcrect.h;
+
+    // Return srcrect if either ratio is < 1 (because integer part of ratio == 0)
+    if (  (ratio_w==0) || (ratio_h==0)  ) return srcrect;
+
+    // Use the smaller of the two ratios as the scaling factor.
+    int K = (ratio_w > ratio_h) ? ratio_h : ratio_w;
+
+    SDL_Rect scalerect = {.x=0,.y=0,.w = K*srcrect.w,.h = K*srcrect.h};
+    assert( winrect.w >= scalerect.w ); assert( winrect.h >= scalerect.h );
+
+    return center_src_in_win(winrect, scalerect);
+
+}
 
 // Control whether DEBUG stuff generates code or not
 enum { DEBUG = 1 };                                     // USER! Set DEBUG : 0 or 1
@@ -206,6 +257,7 @@ SDL_Renderer* ren;
 
 void shutdown(void)
 {
+    SDL_DestroyTexture(GameArt::tex);
     SDL_DestroyRenderer(ren);
     SDL_DestroyWindow(win);
     SDL_Quit();
@@ -217,6 +269,7 @@ int main(int argc, char* argv[])
     // SETUP
     ////////
 
+    std::srand(std::time(0));                           // Seed RNG with current time
     WindowInfo wI(argc, argv);
     if (DEBUG) printf("Window info: %d x %d at %d,%d\n", wI.w, wI.h, wI.x, wI.y);
     if (DEBUG) printf("Number of colors: %ld\n", sizeof(Colors::list)/sizeof(SDL_Color));
@@ -231,6 +284,18 @@ int main(int argc, char* argv[])
         // Set up transparency blending for a transparent heads-up overlay.
         // Just this line is enough to start using the alpha channel on my overlay.
         SDL_SetRenderDrawBlendMode(ren, SDL_BLENDMODE_BLEND); // Draw with alpha
+
+        // Create a texture for game art
+        GameArt::tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_RGBA8888,
+                SDL_TEXTUREACCESS_TARGET,               // Render to this texture
+                GameArt::rect.w, GameArt::rect.h);
+        // Set up game art texture for blending to draw on transparent background.
+        if(SDL_SetTextureBlendMode(GameArt::tex, SDL_BLENDMODE_BLEND) < 0)
+        { // Texture blending is not supported
+            puts("Cannot set texture to blendmode blend.");
+            shutdown();
+            return EXIT_FAILURE;
+        }
     }
 
     /////////////////////
@@ -317,36 +382,81 @@ int main(int argc, char* argv[])
         // RENDERING
         ////////////
 
+        ///////////
+        // GAME ART
+        ///////////
+
+        // Default is to render to the OS window.
+        // Render game art stuff to the GameArt texture instead.
+        SDL_SetRenderTarget(ren, GameArt::tex);
+
         { // Background color
             SDL_Color c = Colors::list[bgnd_color];
             SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
             SDL_RenderClear(ren);
         }
+        SDL_FRect border;                               // Use this in later blocks
         { // Border
-            float W = static_cast<float>(wI.w);   // W : window W as a float
-            float H = static_cast<float>(wI.h);   // H : window H as a float
-            float M = 0.01*W;                     // M : Margin in pixels
-            SDL_FRect border = {.x=M, .y=M, .w=W-2*M, .h=H-2*M};
+            float W = static_cast<float>(GameArt::rect.w);
+            float H = static_cast<float>(GameArt::rect.h);
+            float M = 0.01*W;                           // M : Margin in pixels
+            border = {.x=M, .y=M, .w=W-2*M, .h=H-2*M};
             SDL_Color c = Colors::list[fgnd_color];
             // Render
             SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
             SDL_RenderDrawRectF(ren, &border);
+        }
+        { // Rainbow static : placeholder to show pixel size changing
+            for(int i=0; i<Colors::count; i++)
+            {
+                SDL_Color c = Colors::list[i];
+                constexpr int COUNT = 1<<8;
+                SDL_FPoint points[COUNT];
+                for(int i=0; i<COUNT; i++)
+                {
+                    float x = (static_cast<float>(std::rand()) * (border.w-3)) / RAND_MAX + (border.x+1);
+                    float y = (static_cast<float>(std::rand()) * (border.h-3)) / RAND_MAX + (border.y+1);
+                    points[i] = SDL_FPoint{x,y};
+                }
+                SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
+                SDL_RenderDrawPointsF(ren, points, COUNT);
+            }
         }
         if(  show_overlay  )
         { // Overlay help
             { // Darken light stuff
                 SDL_Color c = Colors::coal;
                 SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a>>1); // 50% darken
-                SDL_Rect rect = {.x=0, .y=0, .w=wI.w, .h=100};
+                SDL_Rect rect = {.x=0, .y=0, .w=GameArt::rect.w, .h=100};
                 SDL_RenderFillRect(ren, &rect);             // Draw filled rect
             }
             { // Lighten dark stuff
                 SDL_Color c = Colors::snow;
                 SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a>>3); // 12% lighten
-                SDL_Rect rect = {.x=0, .y=0, .w=wI.w, .h=100};
+                SDL_Rect rect = {.x=0, .y=0, .w=GameArt::rect.w, .h=100};
                 SDL_RenderFillRect(ren, &rect);             // Draw filled rect
             }
         }
+
+        ////////////
+        // OS WINDOW
+        ////////////
+
+        SDL_SetRenderTarget(ren, NULL);                 // Render to OS window
+        { // Clear the window to a black background
+            SDL_SetRenderDrawColor(ren, 0,0,0,0);
+            SDL_RenderClear(ren);
+        }
+        // Copy the game art to the OS window
+        SDL_Rect dstrect;                               // Game location & size in OS window
+        SDL_Rect winrect = {.x=0,.y=0,.w=wI.w,.h=wI.h}; // OS window size
+        // - Center game art in OS window
+        // - Leave scaling 1:1 or scale-up to fit (but maintain aspect ratio)
+        constexpr bool SCALE_GAME_ART = true;
+        dstrect = (SCALE_GAME_ART) ?
+            scale_src_to_win(winrect, GameArt::rect) :
+            center_src_in_win(winrect, GameArt::rect);
+        SDL_RenderCopy(ren, GameArt::tex, &GameArt::rect, &dstrect);
         SDL_RenderPresent(ren);
     }
     shutdown();

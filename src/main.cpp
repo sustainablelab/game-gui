@@ -167,12 +167,24 @@
 
 namespace GameArt
 {
+    ////////////////
+    // CHUNKY PIXELS
+    ////////////////
                                                         //      scale -----  Try scale=10, 20, 30, etc.
                                                         //                |
                                                         //                v
-    constexpr int scale = 50;                           // Ex: 320:180 = 20*(16:9)
+    constexpr int scale = 20;                           // Ex: 320:180 = 20*(16:9)
     constexpr SDL_Rect rect = {.x=0, .y=0, .w=scale*16, .h=scale*9}; // Game art has a 16:9 aspect ratio
     SDL_Texture* tex;                                   // Render game art to this texture
+}
+namespace GameDemo
+{
+    //////////////////////////
+    // USER: PICK STUFF TO SEE
+    //////////////////////////
+
+    constexpr bool RAINBOW_STATIC = false;
+    constexpr bool RAT_CIRCLE = true;                   // Rational parametrization of a circle
 }
 
 SDL_Rect center_src_in_win(const SDL_Rect& winrect, const SDL_Rect& srcrect)
@@ -264,6 +276,64 @@ void shutdown(void)
     SDL_DestroyRenderer(ren);
     SDL_DestroyWindow(win);
     SDL_Quit();
+}
+
+//////////////////////////////////////////////////////////
+// FUNCTIONS FOR CIRCLE ART USING RATIONAL PARAMETRIZATION
+//////////////////////////////////////////////////////////
+
+namespace RatCircle
+{
+    ////////////////////
+    // ARTWORK FUNCTIONS
+    ////////////////////
+    float x(int n, int d)
+    { // Parameter t = n/d, return x(t) for a circle
+        /* *************DOC***************
+         * Return x(t) for a unit circle parametrized with t
+         *
+         *      ------------------
+         *      |         1-t*t  |
+         *      | x(t) = ------- |
+         *      |         1+t*t  |
+         *      ------------------
+         *
+         * Parameters
+         * ----------
+         * n : int
+         *      t = n/d (n is the numerator of t)
+         * d : int
+         *      t = n/d (d is the denominator of t)
+         * *******************************/
+        float t = static_cast<float>(n)/static_cast<float>(d);
+        return (1-(t*t))/(1+(t*t));
+    }
+    float y(int n, int d)
+    { // Parameter t = n/d, return y(t) for a circle
+        /* *************DOC***************
+         * Return y(t) for a unit circle parametrized with t
+         *
+         *      ------------------
+         *      |           2*t  |
+         *      | y(t) = ------- |
+         *      |         1+t*t  |
+         *      ------------------
+         *
+         * Parameters
+         * ----------
+         * n : int
+         *      t = n/d (n is the numerator of t)
+         * d : int
+         *      t = n/d (d is the denominator of t)
+         * *******************************/
+        float t = static_cast<float>(n)/static_cast<float>(d);
+        return (2*t)/(1+(t*t));
+    }
+
+    /////////////
+    // GAME STATE
+    /////////////
+    int counter = 0;
 }
 
 int main(int argc, char* argv[])
@@ -409,11 +479,57 @@ int main(int argc, char* argv[])
             SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
             SDL_RenderDrawRectF(ren, &border);
         }
+        if(  GameDemo::RAT_CIRCLE  )
+        {
+            using namespace RatCircle;
+
+            { // Draw tardis-colored points
+                SDL_Color c = Colors::tardis;
+                SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
+            }
+
+            constexpr int N = 4;
+            constexpr int COUNT = 4*N;
+            SDL_FPoint points[COUNT];
+            // Make a quarter circle
+            for(int i=0; i<N; i++)
+            {
+                // Express parameter t as an integer ratio
+                int n=i; int d=N;                       // t = n/d
+                // Calculate point [x(t), y(t)]
+                points[i] = SDL_FPoint{.x=x(n,d), .y=y(n,d)};
+            }
+            // Make the other three-quarters of the circle
+            for(int i=N; i<COUNT; i++)
+            {
+                // Next point is the point N indices back, rotated a quarter-circle
+                points[i] = SDL_FPoint{.x=-1*points[i-N].y, .y=points[i-N].x};
+            }
+            // Offset and scale
+            float offset_x; float offset_y;             // Use these for the line too
+            for(int i=0; i<COUNT; i++)
+            {
+                offset_x = GameArt::rect.w/2;           // Offset x to game art center
+                offset_y = GameArt::rect.h/2;           // Offset y to game art center
+                constexpr int SCALE = 32;              // Scale up by factor SCALE
+                points[i] = SDL_FPoint{
+                    .x = (SCALE*points[i].x) + offset_x,
+                    .y = (SCALE*points[i].y) + offset_y };
+            }
+            SDL_RenderDrawPointsF(ren, points, COUNT);
+            { // Draw an orange line from center to a point
+                SDL_Color c = Colors::orange;
+                SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
+            }
+            SDL_RenderDrawLineF(ren, offset_x, offset_y, points[counter%COUNT].x, points[counter%COUNT].y);
+            counter++;
+        }
+        if(  GameDemo::RAINBOW_STATIC  )
         { // Rainbow static : placeholder to show pixel size changing
             for(int i=0; i<Colors::count; i++)
             {
                 SDL_Color c = Colors::list[i];
-                
+
                 constexpr int COUNT = (1<<6) * GameArt::scale*GameArt::scale/100;
                 SDL_FPoint points[COUNT];
                 for(int i=0; i<COUNT; i++)

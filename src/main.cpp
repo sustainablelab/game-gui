@@ -338,6 +338,7 @@ namespace RatCircle
     constexpr int MAX_NUM_POINTS = 256;                 // Max points in circle
     int N = MAX_NUM_POINTS >> 2;                        // N points in a quarter circle
     int COUNT = N << 2;                                 // COUNT is always 4*N
+    float center_x; float center_y;                     // Circle center
 }
 
 int main(int argc, char* argv[])
@@ -479,6 +480,40 @@ int main(int argc, char* argv[])
             }
         }
 
+        /////////////////
+        // PHYSICS UPDATE
+        /////////////////
+
+        if(  GameDemo::RAT_CIRCLE  )
+        {
+            using namespace RatCircle;
+
+            // Make a quarter circle
+            for(int i=0; i<N; i++)
+            {
+                // Express parameter t as an integer ratio
+                int n=i; int d=N;                       // t = n/d
+                // Calculate point [x(t), y(t)]
+                points[i] = SDL_FPoint{.x=x(n,d), .y=y(n,d)};
+            }
+            // Make the other three-quarters of the circle
+            for(int i=N; i<COUNT; i++)
+            {
+                // Next point is the point N indices back, rotated a quarter-circle
+                points[i] = SDL_FPoint{.x=-1*points[i-N].y, .y=points[i-N].x};
+            }
+            // Offset and scale the circle of points
+            for(int i=0; i<COUNT; i++)
+            {
+                center_x = GameArt::rect.w/2;           // Offset x to game art center
+                center_y = GameArt::rect.h/2;           // Offset y to game art center
+                constexpr int SCALE = 32;              // Scale up by factor SCALE
+                points[i] = SDL_FPoint{
+                    .x = (SCALE*points[i].x) + center_x,
+                    .y = (SCALE*points[i].y) + center_y };
+            }
+            counter++;                                  // Track location on circle
+        }
         ////////////
         // RENDERING
         ////////////
@@ -511,31 +546,6 @@ int main(int argc, char* argv[])
         {
             using namespace RatCircle;
 
-            // Make a quarter circle
-            for(int i=0; i<N; i++)
-            {
-                // Express parameter t as an integer ratio
-                int n=i; int d=N;                       // t = n/d
-                // Calculate point [x(t), y(t)]
-                points[i] = SDL_FPoint{.x=x(n,d), .y=y(n,d)};
-            }
-            // Make the other three-quarters of the circle
-            for(int i=N; i<COUNT; i++)
-            {
-                // Next point is the point N indices back, rotated a quarter-circle
-                points[i] = SDL_FPoint{.x=-1*points[i-N].y, .y=points[i-N].x};
-            }
-            // Offset and scale the circle of points
-            float offset_x; float offset_y;             // Use these for the line too
-            for(int i=0; i<COUNT; i++)
-            {
-                offset_x = GameArt::rect.w/2;           // Offset x to game art center
-                offset_y = GameArt::rect.h/2;           // Offset y to game art center
-                constexpr int SCALE = 32;              // Scale up by factor SCALE
-                points[i] = SDL_FPoint{
-                    .x = (SCALE*points[i].x) + offset_x,
-                    .y = (SCALE*points[i].y) + offset_y };
-            }
             { // Draw tardis-colored points
                 SDL_Color c = Colors::tardis;
                 SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
@@ -545,11 +555,10 @@ int main(int argc, char* argv[])
                 SDL_Color c = Colors::orange;
                 SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
                 SDL_RenderDrawLineF(ren,
-                        offset_x, offset_y,
+                        center_x, center_y,
                         points[counter%COUNT].x,
                         points[counter%COUNT].y);
             }
-            counter++;
         }
         if(  GameDemo::RAINBOW_STATIC  )
         { // Rainbow static : placeholder to show pixel size changing

@@ -287,19 +287,13 @@ namespace RatCircle
     /////////////
     // GAME STATE
     /////////////
-    SDL_FPoint* points;                                 // Array of points in circle
-    int counter = 0;                                    // counter : cycle through points in circle
-    uint16_t speed = 11;                                // Counter increments per video frame; controlled by j/k
     // TODO: work out the weird periodic aliasing effects and the rules for "good" numbers
     constexpr uint16_t MAX_NUM_POINTS = (1<<9)-3;       // Max points in circle
     constexpr uint16_t MAX_SPEED = MAX_NUM_POINTS>>4;   // Max counter increments per video frame
-    int N = MAX_NUM_POINTS >> 2;                        // N points in a quarter circle
-    int COUNT = N << 2;                                 // COUNT is always 4*N
-    float center_x; float center_y;                     // Circle center
 
-    ////////////////////
-    // ARTWORK FUNCTIONS
-    ////////////////////
+    /////////////////
+    // PURE FUNCTIONS
+    /////////////////
     float x(int n, int d)
     { // Parameter t = n/d, return x(t) for a circle
         /* *************DOC***************
@@ -342,7 +336,50 @@ namespace RatCircle
         float t = static_cast<float>(n)/static_cast<float>(d);
         return (2*t)/(1+(t*t));
     }
-    void calc_circle_points(void)
+
+    struct Spinner
+    { // Dots that spin around the rational parametrized circle
+        /////////////
+        // GAME STATE
+        /////////////
+        SDL_FPoint* points;                 // Array of points in circle
+        int counter;                        // counter : cycle through points in circle
+        uint16_t speed;                     // Counter increments per video frame; controlled by j/k
+        int N, COUNT;                       // N points in a quarter circle, COUNT is 4*N
+        float center_x; float center_y;     // Circle center
+        uint8_t RADIUS;                         // Circle size
+
+        ////////////
+        // FUNCTIONS
+        ////////////
+
+        Spinner(float, float, uint8_t, uint16_t);   // Setup initial values and allocate memory
+        void calc_circle_points(void);              // Initial circle points calc
+        void increase_resolution(void);             // Increment number of points in circle
+        void decrease_resolution(void);             // Decrement number of points in circle
+    };
+    Spinner::Spinner(float x, float y, uint8_t r, uint16_t s)
+    { // Initial spinner values and memory for points in circle
+        //////////////////
+        // SPIN PARAMETERS
+        //////////////////
+        center_x = x; // GameArt::rect.w/2;       // Offset x to game art center
+        center_y = y; // GameArt::rect.h/2;       // Offset y to game art center
+        RADIUS = r; // 32;                   // Scale up points calc by factor RADIUS
+        speed = s; // 1; // 11;
+        /////////////////
+        // SPIN INTERNALS
+        /////////////////
+        counter = 0;                        // Start spinning from first point in circle
+        N = MAX_NUM_POINTS >> 2;            // N points in a quarter circle
+        COUNT = N << 2;                     // COUNT is always 4*N
+
+        // Allocate a memory pool for cicle points. Remember to free(points).
+        points = (SDL_FPoint *)malloc(sizeof(SDL_FPoint)*MAX_NUM_POINTS);
+        // Calculate circle points (don't need to recalc unless N or RADIUS changes)
+        calc_circle_points();               // Initial circle points calc
+    }
+    void Spinner::calc_circle_points(void)
     { // Write to array of rational points: 4*N in full circle
         // Make a quarter circle
         for(int i=0; i<N; i++)
@@ -361,21 +398,16 @@ namespace RatCircle
         // Offset and scale the circle of points
         for(int i=0; i<COUNT; i++)
         {
-            center_x = GameArt::rect.w/2;           // Offset x to game art center
-            center_y = GameArt::rect.h/2;           // Offset y to game art center
-            constexpr int SCALE = 32;               // Scale up by factor SCALE
             points[i] = SDL_FPoint{
-                .x = (SCALE*points[i].x) + center_x,
-                .y = (SCALE*points[i].y) + center_y };
+                .x = (RADIUS*points[i].x) + center_x,
+                .y = (RADIUS*points[i].y) + center_y };
         }
     }
-
-    //////////////////////////////////
-    // HOW MANY POINTS
-    //////////////////////////////////
-
+    ///////////////////////////////////////
+    // HOW MANY POINTS : RESOLUTION CONTROL
+    ///////////////////////////////////////
     // NOT USED
-    void increase_resolution(void)
+    void Spinner::increase_resolution(void)
     { // Add one more point to the quarter circle (adds four points)
         N++;                        // Num points in quarter circle
         // Clamp N to max memory pool size
@@ -384,7 +416,7 @@ namespace RatCircle
         calc_circle_points();       // Update circle
     }
     // NOT USED
-    void decrease_resolution(void)
+    void Spinner::decrease_resolution(void)
     { // Take away one point from the quarter circle (removes four points)
         N--;                        // Num points in quarter circle
         // Clamp N to minimum size
@@ -392,6 +424,7 @@ namespace RatCircle
         COUNT = 4*N;                // Num points in full circle
         calc_circle_points();       // Update circle
     }
+
 }
 
 int main(int argc, char* argv[])
@@ -442,13 +475,26 @@ int main(int argc, char* argv[])
     // I use {} (the default initializer) to imply any valid initial value is OK.
     bool show_overlay{};                                // Help on/off
 
+    RatCircle::Spinner* bob;
     if (GameDemo::RAT_CIRCLE)
     { // Allocate a memory pool for circle points
-
-        using namespace RatCircle;
-        points = (SDL_FPoint *)malloc(sizeof(SDL_FPoint)*MAX_NUM_POINTS);
-        calc_circle_points();                           // Initial circle points calc
+        bob = new RatCircle::Spinner(
+                                    GameArt::rect.w/2,  // x
+                                    GameArt::rect.h/2,  // y
+                                    32,                 // radius
+                                    11                  // speed
+                                    );
     }
+
+    if (DEBUG) printf(  "Bob info:\n"
+                        "\t- counter: %d\n"
+                        "\t- speed: %d\n"
+                        "\t- N: %d\n"
+                        "\t- COUNT: %d\n",
+                        bob->counter, bob->speed, bob->N, bob->COUNT);
+    if (DEBUG) printf(  "RatCircle info:\n"
+                        "\t- MAX_NUM_POINTS: %d\n",
+                        RatCircle::MAX_NUM_POINTS);
     ///////
     // LOOP
     ///////
@@ -517,19 +563,17 @@ int main(int argc, char* argv[])
                             using namespace RatCircle;
 
                             { // Increment speed, clamp at MAX_SPEED
-                                speed++;
-                                if (speed > MAX_SPEED) speed = MAX_SPEED;
+                                bob->speed++;
+                                if (bob->speed > MAX_SPEED) bob->speed = MAX_SPEED;
                             }
                         }
                         break;
                     case SDLK_j:
                         if (GameDemo::RAT_CIRCLE)
                         {
-                            using namespace RatCircle;
-
                             { // Decrement speed, clamp at 1
-                                speed--;
-                                if (speed==0) speed=1;
+                                bob->speed--;
+                                if (bob->speed==0) bob->speed=1;
                             }
                         }
                         break;
@@ -544,11 +588,9 @@ int main(int argc, char* argv[])
 
         if(  GameDemo::RAT_CIRCLE  )
         {
-            using namespace RatCircle;
-
-            for( int i=0; i<speed; i++)
+            for( int i=0; i<bob->speed; i++)
             {
-                counter++;                              // Track location on circle
+                bob->counter++;                          // Track location on circle
             }
         }
 
@@ -582,28 +624,26 @@ int main(int argc, char* argv[])
         }
         if(  GameDemo::RAT_CIRCLE  )
         {
-            using namespace RatCircle;
-
             if (0)
             { // Draw tardis-colored points
                 SDL_Color c = Colors::tardis;
                 SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
-                SDL_RenderDrawPointsF(ren, points, COUNT);
+                SDL_RenderDrawPointsF(ren, bob->points, bob->COUNT);
             }
             if (0)
             { // Draw an orange line from center to a point
                 SDL_Color c = Colors::orange;
                 SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
                 SDL_RenderDrawLineF(ren,
-                        center_x, center_y,
-                        points[counter%COUNT].x,
-                        points[counter%COUNT].y);
+                        bob->center_x, bob->center_y,
+                        bob->points[bob->counter%bob->COUNT].x,
+                        bob->points[bob->counter%bob->COUNT].y);
             }
             if (1)
             { // Draw an orange pixel at the active point
                 SDL_Color c = Colors::orange;
                 SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
-                SDL_FPoint active_point = points[counter%COUNT];
+                SDL_FPoint active_point = bob->points[bob->counter%bob->COUNT];
                 SDL_RenderDrawPointF(ren, active_point.x, active_point.y);
             }
         }
@@ -662,9 +702,11 @@ int main(int argc, char* argv[])
         SDL_RenderCopy(ren, GameArt::tex, &GameArt::rect, &dstrect);
         SDL_RenderPresent(ren);
     }
+
     if (GameDemo::RAT_CIRCLE)
     { // Free pool of memory for points in the circle
-        free(RatCircle::points);
+        free(bob->points);
+        delete bob;
     }
 
     shutdown();

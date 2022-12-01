@@ -284,6 +284,16 @@ void shutdown(void)
 
 namespace RatCircle
 {
+    /////////////
+    // GAME STATE
+    /////////////
+    SDL_FPoint* points;                                 // Array of points in circle
+    int counter = 0;                                    // counter : cycle through points in circle
+    constexpr int MAX_NUM_POINTS = 256;                 // Max points in circle
+    int N = MAX_NUM_POINTS >> 2;                        // N points in a quarter circle
+    int COUNT = N << 2;                                 // COUNT is always 4*N
+    float center_x; float center_y;                     // Circle center
+
     ////////////////////
     // ARTWORK FUNCTIONS
     ////////////////////
@@ -329,16 +339,33 @@ namespace RatCircle
         float t = static_cast<float>(n)/static_cast<float>(d);
         return (2*t)/(1+(t*t));
     }
-
-    /////////////
-    // GAME STATE
-    /////////////
-    SDL_FPoint* points;                                 // Array of points in circle
-    int counter = 0;                                    // counter : cycle through points in circle
-    constexpr int MAX_NUM_POINTS = 256;                 // Max points in circle
-    int N = MAX_NUM_POINTS >> 2;                        // N points in a quarter circle
-    int COUNT = N << 2;                                 // COUNT is always 4*N
-    float center_x; float center_y;                     // Circle center
+    void calc_circle_points(void)
+    {
+        // Make a quarter circle
+        for(int i=0; i<N; i++)
+        {
+            // Express parameter t as an integer ratio
+            int n=i; int d=N;                       // t = n/d
+            // Calculate point [x(t), y(t)]
+            points[i] = SDL_FPoint{.x=x(n,d), .y=y(n,d)};
+        }
+        // Make the other three-quarters of the circle
+        for(int i=N; i<COUNT; i++)
+        {
+            // Next point is the point N indices back, rotated a quarter-circle
+            points[i] = SDL_FPoint{.x=-1*points[i-N].y, .y=points[i-N].x};
+        }
+        // Offset and scale the circle of points
+        for(int i=0; i<COUNT; i++)
+        {
+            center_x = GameArt::rect.w/2;           // Offset x to game art center
+            center_y = GameArt::rect.h/2;           // Offset y to game art center
+            constexpr int SCALE = 32;               // Scale up by factor SCALE
+            points[i] = SDL_FPoint{
+                .x = (SCALE*points[i].x) + center_x,
+                .y = (SCALE*points[i].y) + center_y };
+        }
+    }
 }
 
 int main(int argc, char* argv[])
@@ -487,33 +514,10 @@ int main(int argc, char* argv[])
         if(  GameDemo::RAT_CIRCLE  )
         {
             using namespace RatCircle;
-
-            // Make a quarter circle
-            for(int i=0; i<N; i++)
-            {
-                // Express parameter t as an integer ratio
-                int n=i; int d=N;                       // t = n/d
-                // Calculate point [x(t), y(t)]
-                points[i] = SDL_FPoint{.x=x(n,d), .y=y(n,d)};
-            }
-            // Make the other three-quarters of the circle
-            for(int i=N; i<COUNT; i++)
-            {
-                // Next point is the point N indices back, rotated a quarter-circle
-                points[i] = SDL_FPoint{.x=-1*points[i-N].y, .y=points[i-N].x};
-            }
-            // Offset and scale the circle of points
-            for(int i=0; i<COUNT; i++)
-            {
-                center_x = GameArt::rect.w/2;           // Offset x to game art center
-                center_y = GameArt::rect.h/2;           // Offset y to game art center
-                constexpr int SCALE = 32;              // Scale up by factor SCALE
-                points[i] = SDL_FPoint{
-                    .x = (SCALE*points[i].x) + center_x,
-                    .y = (SCALE*points[i].y) + center_y };
-            }
+            calc_circle_points();
             counter++;                                  // Track location on circle
         }
+
         ////////////
         // RENDERING
         ////////////

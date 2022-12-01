@@ -278,9 +278,9 @@ void shutdown(void)
     SDL_Quit();
 }
 
-//////////////////////////////////////////////////////////
-// FUNCTIONS FOR CIRCLE ART USING RATIONAL PARAMETRIZATION
-//////////////////////////////////////////////////////////
+////////////////////////////////////////////
+// CIRCLE ART USING RATIONAL PARAMETRIZATION
+////////////////////////////////////////////
 
 namespace RatCircle
 {
@@ -343,7 +343,7 @@ namespace RatCircle
         // GAME STATE
         /////////////
         SDL_FPoint* points;                 // Array of points in circle
-        int counter;                        // counter : cycle through points in circle
+        uint16_t counter;                   // counter : cycle through points in circle, phase = counter%COUNT
         uint16_t speed;                     // Counter increments per video frame; controlled by j/k
         int N, COUNT;                       // N points in a quarter circle, COUNT is 4*N
         float center_x; float center_y;     // Circle center
@@ -353,24 +353,24 @@ namespace RatCircle
         // FUNCTIONS
         ////////////
 
-        Spinner(float, float, uint8_t, uint16_t);   // Setup initial values and allocate memory
+        Spinner(float, float, uint8_t, uint16_t, uint16_t);   // Setup initial values and allocate memory
         void calc_circle_points(void);              // Initial circle points calc
         void increase_resolution(void);             // Increment number of points in circle
         void decrease_resolution(void);             // Decrement number of points in circle
     };
-    Spinner::Spinner(float x, float y, uint8_t r, uint16_t s)
+    Spinner::Spinner(float x, float y, uint8_t r, uint16_t s, uint16_t p)
     { // Initial spinner values and memory for points in circle
         //////////////////
         // SPIN PARAMETERS
         //////////////////
-        center_x = x; // GameArt::rect.w/2;       // Offset x to game art center
-        center_y = y; // GameArt::rect.h/2;       // Offset y to game art center
-        RADIUS = r; // 32;                   // Scale up points calc by factor RADIUS
-        speed = s; // 1; // 11;
+        center_x = x;                   // GameArt::rect.w/2 : offset x to game art center
+        center_y = y;                   // GameArt::rect.h/2 : offset y to game art center
+        RADIUS = r;                     // 32 : Scale up points calc by factor RADIUS
+        speed = s;                      // 1-MAX_SPEED : number of physics frames per video frame
+        counter = p;                    // 0 : start spinning from first point in circle
         /////////////////
         // SPIN INTERNALS
         /////////////////
-        counter = 0;                        // Start spinning from first point in circle
         N = MAX_NUM_POINTS >> 2;            // N points in a quarter circle
         COUNT = N << 2;                     // COUNT is always 4*N
 
@@ -476,7 +476,8 @@ int main(int argc, char* argv[])
     bool show_overlay{};                                // Help on/off
 
     RatCircle::Spinner *ali, *bob;                      // Example code
-    constexpr int NSPIN = 1024;
+    constexpr int NSPIN = 1<<12;                        // Number of spinners on screen: BIG number
+    constexpr int NTRAIL = 25;                           // Number of pixels in spinner trail : 1 - 25
     RatCircle::Spinner *spinners[NSPIN];
     if (GameDemo::RAT_CIRCLE)
     {
@@ -495,8 +496,9 @@ int main(int argc, char* argv[])
             // Start off with a radius between 2 and 64
             uint8_t r = (std::rand() % 62)+ 2;
             // Start off with a random speed between 1 and 11
-            uint16_t s = (std::rand() % 10)+1;
-            spinners[i] = new RatCircle::Spinner(x,y,r,s);
+            uint16_t s = (std::rand() % 10)+1; // Initial speed
+            uint16_t p = std::rand() % RatCircle::MAX_NUM_POINTS; // Initial phase
+            spinners[i] = new RatCircle::Spinner(x,y,r,s,p);
         }
         if (0)
         { // Example spawning individuals deliberately
@@ -504,13 +506,15 @@ int main(int argc, char* argv[])
                                     GameArt::rect.w/2+20,   // x
                                     GameArt::rect.h/2+5,    // y
                                     32,                     // radius
-                                    4                       // speed
+                                    4,                      // speed
+                                    0                       // phase
                                     );
             bob = new RatCircle::Spinner(
                                     GameArt::rect.w/2,      // x
                                     GameArt::rect.h/2,      // y
                                     32,                     // radius
-                                    11                      // speed
+                                    11,                      // speed
+                                    0                       // phase
                                     );
         }
     }
@@ -604,6 +608,11 @@ int main(int argc, char* argv[])
                                     if (spinners[i]->RADIUS > MAX) spinners[i]->RADIUS = MAX;
                                     // Update points
                                     spinners[i]->calc_circle_points();
+                                    if(0)
+                                    { // Compensate for increased radius with decreased speed
+                                        spinners[i]->speed--;
+                                        if (spinners[i]->speed==0) spinners[i]->speed=1;
+                                    }
 
                                 }
                                 if(0)
@@ -637,8 +646,11 @@ int main(int argc, char* argv[])
                     case SDLK_j:                        // j : slower, J : smaller
                         if (GameDemo::RAT_CIRCLE)
                         {
+                            using namespace RatCircle;
+
                             if(  kmod&KMOD_SHIFT  )
                             { // Decrement RADIUS, clamp at 4
+
                                 for(int i=0; i<NSPIN; i++)
                                 {
                                     spinners[i]->RADIUS--;
@@ -646,6 +658,11 @@ int main(int argc, char* argv[])
                                     if (spinners[i]->RADIUS<MIN) spinners[i]->RADIUS=MIN;
                                     // Update points
                                     spinners[i]->calc_circle_points();
+                                    if (0)
+                                    { // Compensate for decreased radius with increased speed
+                                        spinners[i]->speed++;
+                                        if (spinners[i]->speed > MAX_SPEED) spinners[i]->speed = MAX_SPEED;
+                                    }
                                 }
                                 if(0)
                                 {
@@ -756,10 +773,21 @@ int main(int argc, char* argv[])
             { // Draw each spinner at its active point
                 for(int i=0; i<NSPIN; i++)
                 {
+                    int index = i%Colors::count;
+                    if (index == bgnd_color) index++;   // Don't make spinners same color as bgnd
                     SDL_Color c = Colors::list[i%Colors::count];
                     SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
-                    SDL_FPoint active_point = spinners[i]->points[spinners[i]->counter%spinners[i]->COUNT];
-                    SDL_RenderDrawPointF(ren, active_point.x, active_point.y);
+                    // TODO: just redo this as phase and be done with it
+                    uint16_t counter = spinners[i]->counter; int COUNT = spinners[i]->COUNT;
+                    int phase = counter%COUNT; // a point from 0 to COUNT-1
+                    // Draw the point AND a trail after it for one color spinners
+                    int ntrail = (index == fgnd_color) ? NTRAIL : 1;
+                    for(int j=0; j<ntrail; j++)
+                    {
+                        SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a-(j*10));
+                        SDL_FPoint active_point = spinners[i]->points[phase-j];
+                        SDL_RenderDrawPointF(ren, active_point.x, active_point.y);
+                    }
                 }
                 if(0)
                 { // ali is lime

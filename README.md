@@ -54,6 +54,13 @@ Toggle fullscreen:
 
 - `F11`
 
+Interact with the spinning rainbow particles:
+
+- `j` - slower
+- `k` - faster
+- `J` - spin in smaller circles
+- `K` - spin in larger circles
+
 Resize the window to see game art resizing behavior. Game art
 maintains constant 16:9 aspect ratio, but pixel size increases,
 creating a chunky pixel effect. 

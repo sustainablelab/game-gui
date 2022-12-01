@@ -376,7 +376,7 @@ namespace RatCircle
 
         // Allocate a memory pool for cicle points. Remember to free(points).
         points = (SDL_FPoint *)malloc(sizeof(SDL_FPoint)*MAX_NUM_POINTS);
-        // Calculate circle points (don't need to recalc unless N or RADIUS changes)
+        // Calculate circle points (recalc later if change: N, RADIUS, center)
         calc_circle_points();               // Initial circle points calc
     }
     void Spinner::calc_circle_points(void)
@@ -475,26 +475,59 @@ int main(int argc, char* argv[])
     // I use {} (the default initializer) to imply any valid initial value is OK.
     bool show_overlay{};                                // Help on/off
 
-    RatCircle::Spinner* bob;
+    RatCircle::Spinner *ali, *bob;                      // Example code
+    constexpr int NSPIN = 1024;
+    RatCircle::Spinner *spinners[NSPIN];
     if (GameDemo::RAT_CIRCLE)
-    { // Allocate a memory pool for circle points
-        bob = new RatCircle::Spinner(
-                                    GameArt::rect.w/2,  // x
-                                    GameArt::rect.h/2,  // y
-                                    32,                 // radius
-                                    11                  // speed
+    {
+        SDL_FRect border;
+        { // Spawn spinners within this border
+            float W = static_cast<float>(GameArt::rect.w);
+            float H = static_cast<float>(GameArt::rect.h);
+            float M = 0.01*W;                           // M : Margin in pixels
+            border = {.x=M, .y=M, .w=W-2*M, .h=H-2*M};
+        }
+        for(int i=0; i<NSPIN; i++)
+        { // Randowm spawn a bunch of spinners
+            // Spawn within the border
+            float x = (static_cast<float>(std::rand()) * (border.w-3)) / RAND_MAX + (border.x+1);
+            float y = (static_cast<float>(std::rand()) * (border.h-3)) / RAND_MAX + (border.y+1);
+            // Start off with a radius between 2 and 64
+            uint8_t r = (std::rand() % 62)+ 2;
+            // Start off with a random speed between 1 and 11
+            uint16_t s = (std::rand() % 10)+1;
+            spinners[i] = new RatCircle::Spinner(x,y,r,s);
+        }
+        if (0)
+        { // Example spawning individuals deliberately
+            ali = new RatCircle::Spinner(
+                                    GameArt::rect.w/2+20,   // x
+                                    GameArt::rect.h/2+5,    // y
+                                    32,                     // radius
+                                    4                       // speed
                                     );
+            bob = new RatCircle::Spinner(
+                                    GameArt::rect.w/2,      // x
+                                    GameArt::rect.h/2,      // y
+                                    32,                     // radius
+                                    11                      // speed
+                                    );
+        }
     }
 
-    if (DEBUG) printf(  "Bob info:\n"
-                        "\t- counter: %d\n"
-                        "\t- speed: %d\n"
-                        "\t- N: %d\n"
-                        "\t- COUNT: %d\n",
-                        bob->counter, bob->speed, bob->N, bob->COUNT);
-    if (DEBUG) printf(  "RatCircle info:\n"
-                        "\t- MAX_NUM_POINTS: %d\n",
-                        RatCircle::MAX_NUM_POINTS);
+    if (0)
+    { // Debugging my Spinner constructor
+        if (DEBUG) printf(  "Bob info:\n"
+                            "\t- counter: %d\n"
+                            "\t- speed: %d\n"
+                            "\t- N: %d\n"
+                            "\t- COUNT: %d\n",
+                            bob->counter, bob->speed, bob->N, bob->COUNT);
+        if (DEBUG) printf(  "RatCircle info:\n"
+                            "\t- MAX_NUM_POINTS: %d\n",
+                            RatCircle::MAX_NUM_POINTS);
+    }
+
     ///////
     // LOOP
     ///////
@@ -557,23 +590,89 @@ int main(int argc, char* argv[])
                         if(  kmod&KMOD_SHIFT  ) show_overlay = !show_overlay;
                         break;
 
-                    case SDLK_k:
+                    case SDLK_k:                        // k : faster, K : bigger
                         if (GameDemo::RAT_CIRCLE)
                         {
                             using namespace RatCircle;
 
+                            if(  kmod&KMOD_SHIFT  )
+                            { // Increment RADIUS, clamp at window h
+                                int MAX = GameArt::rect.h/2;
+                                for(int i=0; i<NSPIN; i++)
+                                {
+                                    spinners[i]->RADIUS++;
+                                    if (spinners[i]->RADIUS > MAX) spinners[i]->RADIUS = MAX;
+                                    // Update points
+                                    spinners[i]->calc_circle_points();
+
+                                }
+                                if(0)
+                                {
+                                    ali->RADIUS++;
+                                    bob->RADIUS++;
+                                    if (ali->RADIUS > MAX) ali->RADIUS = MAX;
+                                    if (bob->RADIUS > MAX) bob->RADIUS = MAX;
+                                    // Update points
+                                    ali->calc_circle_points();
+                                    bob->calc_circle_points();
+                                }
+                            }
+                            else
                             { // Increment speed, clamp at MAX_SPEED
-                                bob->speed++;
-                                if (bob->speed > MAX_SPEED) bob->speed = MAX_SPEED;
+                                for(int i=0; i<NSPIN; i++)
+                                {
+                                    spinners[i]->speed++;
+                                    if (spinners[i]->speed > MAX_SPEED) spinners[i]->speed = MAX_SPEED;
+                                }
+                                if(0)
+                                {
+                                    ali->speed++;
+                                    bob->speed++;
+                                    if (ali->speed > MAX_SPEED) ali->speed = MAX_SPEED;
+                                    if (bob->speed > MAX_SPEED) bob->speed = MAX_SPEED;
+                                }
                             }
                         }
                         break;
-                    case SDLK_j:
+                    case SDLK_j:                        // j : slower, J : smaller
                         if (GameDemo::RAT_CIRCLE)
                         {
+                            if(  kmod&KMOD_SHIFT  )
+                            { // Decrement RADIUS, clamp at 4
+                                for(int i=0; i<NSPIN; i++)
+                                {
+                                    spinners[i]->RADIUS--;
+                                    int MIN = 2;
+                                    if (spinners[i]->RADIUS<MIN) spinners[i]->RADIUS=MIN;
+                                    // Update points
+                                    spinners[i]->calc_circle_points();
+                                }
+                                if(0)
+                                {
+                                    ali->RADIUS--;
+                                    bob->RADIUS--;
+                                    int MIN = 2;
+                                    if (ali->RADIUS<MIN) ali->RADIUS=MIN;
+                                    if (bob->RADIUS<MIN) bob->RADIUS=MIN;
+                                    // Update points
+                                    ali->calc_circle_points();
+                                    bob->calc_circle_points();
+                                }
+                            }
+                            else
                             { // Decrement speed, clamp at 1
-                                bob->speed--;
-                                if (bob->speed==0) bob->speed=1;
+                                for(int i=0; i<NSPIN; i++)
+                                {
+                                    spinners[i]->speed--;
+                                    if (spinners[i]->speed==0) spinners[i]->speed=1;
+                                }
+                                if(0)
+                                {
+                                    ali->speed--;
+                                    bob->speed--;
+                                    if (ali->speed==0) ali->speed=1;
+                                    if (bob->speed==0) bob->speed=1;
+                                }
                             }
                         }
                         break;
@@ -588,9 +687,23 @@ int main(int argc, char* argv[])
 
         if(  GameDemo::RAT_CIRCLE  )
         {
-            for( int i=0; i<bob->speed; i++)
+            for(int i=0; i<NSPIN; i++)
             {
-                bob->counter++;                          // Track location on circle
+                for( int j=0; j<spinners[i]->speed; j++)
+                {
+                    spinners[i]->counter++;             // Track location on circle
+                }
+            }
+            if(0)
+            {
+                for( int i=0; i<ali->speed; i++)
+                {
+                    ali->counter++;                          // Track location on circle
+                }
+                for( int i=0; i<bob->speed; i++)
+                {
+                    bob->counter++;                          // Track location on circle
+                }
             }
         }
 
@@ -640,11 +753,28 @@ int main(int argc, char* argv[])
                         bob->points[bob->counter%bob->COUNT].y);
             }
             if (1)
-            { // Draw an orange pixel at the active point
-                SDL_Color c = Colors::orange;
-                SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
-                SDL_FPoint active_point = bob->points[bob->counter%bob->COUNT];
-                SDL_RenderDrawPointF(ren, active_point.x, active_point.y);
+            { // Draw each spinner at its active point
+                for(int i=0; i<NSPIN; i++)
+                {
+                    SDL_Color c = Colors::list[i%Colors::count];
+                    SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
+                    SDL_FPoint active_point = spinners[i]->points[spinners[i]->counter%spinners[i]->COUNT];
+                    SDL_RenderDrawPointF(ren, active_point.x, active_point.y);
+                }
+                if(0)
+                { // ali is lime
+                    SDL_Color c = Colors::lime;
+                    SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
+                    SDL_FPoint active_point = ali->points[ali->counter%ali->COUNT];
+                    SDL_RenderDrawPointF(ren, active_point.x, active_point.y);
+                }
+                if(0)
+                { // bob is orange
+                    SDL_Color c = Colors::orange;
+                    SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
+                    SDL_FPoint active_point = bob->points[bob->counter%bob->COUNT];
+                    SDL_RenderDrawPointF(ren, active_point.x, active_point.y);
+                }
             }
         }
         if(  GameDemo::RAINBOW_STATIC  )
@@ -705,8 +835,18 @@ int main(int argc, char* argv[])
 
     if (GameDemo::RAT_CIRCLE)
     { // Free pool of memory for points in the circle
-        free(bob->points);
-        delete bob;
+        for(int i=0; i<NSPIN; i++)
+        {
+            free(spinners[i]->points);
+            delete spinners[i];
+        }
+        if(0)
+        {
+            free(ali->points);
+            delete ali;
+            free(bob->points);
+            delete bob;
+        }
     }
 
     shutdown();

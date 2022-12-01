@@ -173,7 +173,7 @@ namespace GameArt
                                                         //      scale -----  Try scale=10, 20, 30, etc.
                                                         //                |
                                                         //                v
-    constexpr int scale = 20;                           // Ex: 320:180 = 20*(16:9)
+    constexpr int scale = 40;                           // Ex: 320:180 = 20*(16:9)
     constexpr SDL_Rect rect = {.x=0, .y=0, .w=scale*16, .h=scale*9}; // Game art has a 16:9 aspect ratio
     SDL_Texture* tex;                                   // Render game art to this texture
 }
@@ -289,7 +289,10 @@ namespace RatCircle
     /////////////
     SDL_FPoint* points;                                 // Array of points in circle
     int counter = 0;                                    // counter : cycle through points in circle
-    constexpr int MAX_NUM_POINTS = 256;                 // Max points in circle
+    uint16_t speed = 11;                                // Counter increments per video frame; controlled by j/k
+    // TODO: work out the weird periodic aliasing effects and the rules for "good" numbers
+    constexpr uint16_t MAX_NUM_POINTS = (1<<9)-3;       // Max points in circle
+    constexpr uint16_t MAX_SPEED = MAX_NUM_POINTS>>4;   // Max counter increments per video frame
     int N = MAX_NUM_POINTS >> 2;                        // N points in a quarter circle
     int COUNT = N << 2;                                 // COUNT is always 4*N
     float center_x; float center_y;                     // Circle center
@@ -340,7 +343,7 @@ namespace RatCircle
         return (2*t)/(1+(t*t));
     }
     void calc_circle_points(void)
-    {
+    { // Write to array of rational points: 4*N in full circle
         // Make a quarter circle
         for(int i=0; i<N; i++)
         {
@@ -366,6 +369,29 @@ namespace RatCircle
                 .y = (SCALE*points[i].y) + center_y };
         }
     }
+
+    //////////////////////////////////
+    // HOW MANY POINTS
+    //////////////////////////////////
+
+    // NOT USED
+    void increase_resolution(void)
+    { // Add one more point to the quarter circle (adds four points)
+        N++;                        // Num points in quarter circle
+        // Clamp N to max memory pool size
+        if (4*N > MAX_NUM_POINTS) N = MAX_NUM_POINTS>>2;
+        COUNT = 4*N;                // Num points in full circle
+        calc_circle_points();       // Update circle
+    }
+    // NOT USED
+    void decrease_resolution(void)
+    { // Take away one point from the quarter circle (removes four points)
+        N--;                        // Num points in quarter circle
+        // Clamp N to minimum size
+        if (N < 1) N = 1;
+        COUNT = 4*N;                // Num points in full circle
+        calc_circle_points();       // Update circle
+    }
 }
 
 int main(int argc, char* argv[])
@@ -377,7 +403,7 @@ int main(int argc, char* argv[])
     std::srand(std::time(0));                           // Seed RNG with current time
     WindowInfo wI(argc, argv);
     if (DEBUG) printf("Window info: %d x %d at %d,%d\n", wI.w, wI.h, wI.x, wI.y);
-    if (DEBUG) printf("Number of colors: %lld\n", sizeof(Colors::list)/sizeof(SDL_Color));
+    if (DEBUG) printf("Number of colors: %ld\n", sizeof(Colors::list)/sizeof(SDL_Color));
     { // SDL Setup
         SDL_Init(SDL_INIT_VIDEO|SDL_INIT_AUDIO);
         win = SDL_CreateWindow(argv[0], wI.x, wI.y, wI.w, wI.h, wI.flags);
@@ -418,7 +444,10 @@ int main(int argc, char* argv[])
 
     if (GameDemo::RAT_CIRCLE)
     { // Allocate a memory pool for circle points
-        RatCircle::points = (SDL_FPoint *)malloc(sizeof(SDL_FPoint)*RatCircle::MAX_NUM_POINTS);
+
+        using namespace RatCircle;
+        points = (SDL_FPoint *)malloc(sizeof(SDL_FPoint)*MAX_NUM_POINTS);
+        calc_circle_points();                           // Initial circle points calc
     }
     ///////
     // LOOP
@@ -486,20 +515,22 @@ int main(int argc, char* argv[])
                         if (GameDemo::RAT_CIRCLE)
                         {
                             using namespace RatCircle;
-                            N++;                    // Num points in quarter circle
-                            // Clamp N to max memory pool size
-                            if (4*N > MAX_NUM_POINTS) N = MAX_NUM_POINTS>>2;
-                            COUNT = 4*N;            // Num points in full circle
+
+                            { // Increment speed, clamp at MAX_SPEED
+                                speed++;
+                                if (speed > MAX_SPEED) speed = MAX_SPEED;
+                            }
                         }
                         break;
                     case SDLK_j:
                         if (GameDemo::RAT_CIRCLE)
                         {
                             using namespace RatCircle;
-                            N--;                    // Num points in quarter circle
-                            // Clamp N to minimum size
-                            if (N < 1) N = 1;
-                            COUNT = 4*N;            // Num points in full circle
+
+                            { // Decrement speed, clamp at 1
+                                speed--;
+                                if (speed==0) speed=1;
+                            }
                         }
                         break;
                     default: break;
@@ -514,8 +545,11 @@ int main(int argc, char* argv[])
         if(  GameDemo::RAT_CIRCLE  )
         {
             using namespace RatCircle;
-            calc_circle_points();
-            counter++;                                  // Track location on circle
+
+            for( int i=0; i<speed; i++)
+            {
+                counter++;                              // Track location on circle
+            }
         }
 
         ////////////
@@ -550,11 +584,13 @@ int main(int argc, char* argv[])
         {
             using namespace RatCircle;
 
+            if (0)
             { // Draw tardis-colored points
                 SDL_Color c = Colors::tardis;
                 SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
                 SDL_RenderDrawPointsF(ren, points, COUNT);
             }
+            if (0)
             { // Draw an orange line from center to a point
                 SDL_Color c = Colors::orange;
                 SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
@@ -562,6 +598,13 @@ int main(int argc, char* argv[])
                         center_x, center_y,
                         points[counter%COUNT].x,
                         points[counter%COUNT].y);
+            }
+            if (1)
+            { // Draw an orange pixel at the active point
+                SDL_Color c = Colors::orange;
+                SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
+                SDL_FPoint active_point = points[counter%COUNT];
+                SDL_RenderDrawPointF(ren, active_point.x, active_point.y);
             }
         }
         if(  GameDemo::RAINBOW_STATIC  )

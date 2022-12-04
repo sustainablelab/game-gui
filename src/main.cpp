@@ -115,8 +115,23 @@
  * - mouse event
  * - OS event
  *
- * The UI code doesn't actually do things.
- * The events cause stuff to happen by updating the game state.
+ * There are two ways to handle keyboard events in SDL.
+ *
+ * 1. SDL_PollEvent(), then check for a SDL_KEYDOWN event, then check which key
+ * 2. SDL_PumpEvents(), then SDL_GetKeyboardState(), then check which key
+ *
+ * The first method puts a delay between the first keypress and a repeated press.
+ * This is the kind of behavior for a tile-based game or navigating text in a text editor.
+ *
+ * The second method has no delay between the first keypress and a repeated press.
+ * This is the kind of behavior for a platformer.
+ * It also feels like the repeated presses come faster (rapid fire) in the second method.
+ *
+ * In GameDemo::BLOB, I assign HJKL for movement using the first method (tile-based),
+ * and WASD for movement using the second method (platformer).
+ *
+ * The UI code doesn't actually do things. I mostly just set flags.
+ * So the UI events cause stuff to happen by updating the game state.
  * Then other parts of the program do the actual thing based on the game state.
  *
  * Examples of state touched by the UI code:
@@ -129,8 +144,10 @@
  *          - update the rectangle that tracks the window size
  *          - anything that depends on window size is checking this rectangle on
  *            every frame to use the latest window size
- * - internal state:
- *      - a keypress event puts me in debug mode where keypresses alter physics
+ * - player action:
+ *      - anything the player does, like movement, just sets a flag
+ *      - the flag is consumed in the physics state
+ *      - the state up date in physics is then picked up during rendering
  * - physics state:
  *      - a keypress event (if in debug mode) changes the speed of light
  * - graphics state:
@@ -138,9 +155,11 @@
  *      - a keypress event (if in debug mode) cycles through a list of colors
  *        I'm testing out
  *
- * I try to silo which code has write access to which state, but no single
- * section owns the right to update a particular portion of the state. Some
- * graphics state updating is done by both the UI and by the Physics code.
+ * No hard and fast rules. Still finding the approach with the least friction.
+ * I am consistently finding myself moving calculations to the physics section.
+ * UI section feeds the physics best by setting flags and doing little else.
+ * The rendering section does best by visualizing the latest physics calculations
+ * and not doing calculations of its own.
  * *******************************/
 /* *************Physics code***************
  * - calculate the physics for all the stuff
@@ -149,6 +168,12 @@
  * Physics code does not touch as many categories of state as the UI code.
  * But physics code does a lot more work on the graphics state than the UI code
  * does.
+ *
+ * The word physics is doing a lot of work here. I really mean animation.
+ * Control the speed of animation by putting the state changes in the
+ * physics loop, then either running that loop faster at multiples of VSYNC
+ * (with a for loop) or at fractions of the VSYNC (using a counter to count
+ * video frames before iterating the physics).
  * *******************************/
 /* *************Rendering code***************
  * Draw graphics based on the game state.
@@ -173,7 +198,7 @@ namespace GameArt
                                                         //      scale <----  Try scale=10, 20, 40, 60, 80
                                                         //      |  10: max chunky! 20: retro game
                                                         //      v  80: high-res
-    constexpr int scale = 80;                           // Ex: 20*(16:9) = 320:180
+    constexpr int scale = 20;                           // Ex: 20*(16:9) = 320:180
     constexpr SDL_Rect rect = {.x=0, .y=0, .w=scale*16, .h=scale*9}; // Game art has a 16:9 aspect ratio
     SDL_Texture* tex;                                   // Render game art to this texture
 }
@@ -183,9 +208,9 @@ namespace GameDemo
     // USER: PICK STUFF TO SEE
     //////////////////////////
 
-    constexpr bool RAINBOW_STATIC = false;
-    constexpr bool RAT_CIRCLE = true;                  // Rational parametrization of a circle
-    constexpr bool BLOB = false;                         // Be an ameoba-plasma-ball-thing (uses RatCircle)
+    constexpr bool RAINBOW_STATIC = false;              // Just random colors
+    constexpr bool RAT_CIRCLE = false;                  // FAVORITE: Rational parametrization of a circle
+    constexpr bool BLOB = true;                         // Be an ameoba-plasma-ball-thing (uses RatCircle)
     constexpr bool FIT_CURVE = false;                   // Fit a curve with dCB quadratics
 }
 
@@ -291,7 +316,7 @@ namespace RatCircle
     /////////////
     // TODO: work out the weird periodic aliasing effects and the rules for "good" numbers
     constexpr uint16_t MAX_NUM_POINTS = (1<<9)-3;       // Max points in circle
-    constexpr uint16_t MAX_SPEED = MAX_NUM_POINTS>>4;   // Max counter increments per video frame
+    constexpr uint16_t MAX_SPEED = MAX_NUM_POINTS/(1<<4);   // Max counter increments per video frame
 
     /////////////////
     // PURE FUNCTIONS
@@ -373,7 +398,7 @@ namespace RatCircle
         /////////////////
         // SPIN INTERNALS
         /////////////////
-        N = MAX_NUM_POINTS >> 2;            // N points in a quarter circle
+        N = MAX_NUM_POINTS/(1<<2);          // N points in a quarter circle
         COUNT = N << 2;                     // COUNT is always 4*N
 
         // Allocate a memory pool for cicle points. Remember to free(points).
@@ -413,7 +438,7 @@ namespace RatCircle
     { // Add one more point to the quarter circle (adds four points)
         N++;                        // Num points in quarter circle
         // Clamp N to max memory pool size
-        if (4*N > MAX_NUM_POINTS) N = MAX_NUM_POINTS>>2;
+        if (4*N > MAX_NUM_POINTS) N = MAX_NUM_POINTS/(1<<2);
         COUNT = 4*N;                // Num points in full circle
         calc_circle_points();       // Update circle
     }
@@ -430,7 +455,7 @@ namespace RatCircle
 }
 
 namespace Blob
-{ // A RatCircle with jiggley points
+{ // A RatCircle with jiggly points
 
     // Specify the circle the Blob is based on
     SDL_FPoint center;
@@ -442,9 +467,9 @@ namespace Blob
     // Set the number of points in the RatCircle here
     //         ----------------
     //                   |
-    //                   |----(work in powers of 2, 2^3 is good)
+    //                   |----(explore powers of 2, between 2^2 and 2^3 looks good)
     //                   v
-    constexpr int N = 1<<3;                             // Num points in quarter-circle
+    constexpr int N =  6;                               // Num points in quarter-circle
     constexpr int FULL = N*4;                           // Num points in full-circle
     SDL_FPoint* points;                                 // The jiggly circle points
     SDL_FPoint* points_debug;                           // Circle points without jiggle
@@ -501,6 +526,8 @@ int main(int argc, char* argv[])
     bool flag_bigger{};                                 // Pressed key for bigger
     bool flag_down{};                                   // Pressed key for down
     bool flag_up{};                                     // Pressed key for up
+    bool flag_left{};                                   // Pressed key for left
+    bool flag_right{};                                  // Pressed key for right
 
     // RAT_CIRCLE demo -- globals
     RatCircle::Spinner *ali, *bob;                      // Example code for individual spinners
@@ -552,16 +579,16 @@ int main(int argc, char* argv[])
 
     if (GameDemo::BLOB)
     {
-        // Initial blob center: center of game window
+        // Blob initial center: center of game window
         Blob::center = SDL_FPoint{
             .x=static_cast<float>(GameArt::rect.w/2),
             .y=static_cast<float>(GameArt::rect.h/2)
         };
-        // Initial radius: tiny fraction of the game window width
-        Blob::radius = static_cast<float>(GameArt::rect.w/64);
+        // Blob initial radius: tiny fraction of the game window width
+        Blob::radius = static_cast<float>(GameArt::rect.w/12);
         // Allocate memory for the points in the blob shape
         Blob::points = (SDL_FPoint*)malloc(sizeof(SDL_FPoint) * Blob::FULL);
-        // Allocate memory to draw points without jiggle (for debug purposes)
+        // Allocate memory for debug overlay: debug blob points do NOT jiggle
         Blob::points_debug = (SDL_FPoint*)malloc(sizeof(SDL_FPoint) * Blob::FULL);
     }
     if (0)
@@ -586,173 +613,195 @@ int main(int argc, char* argv[])
         // UI
         /////
         SDL_Keymod kmod = SDL_GetModState();            // Check for modifier keys
-        SDL_Event e; while(  SDL_PollEvent(&e)  )       // Handle the event queue
-        { // See tag SDL_EventType
+        { // Polled : for tile-game WASD movement style
 
-            // Quit with default OS stuff
-            if (  e.type == SDL_QUIT  ) quit = true;    // Alt-F4 / click X
-
-            // Update window info if user resizes window
-            if (  e.type == SDL_WINDOWEVENT  )
+            // See tag SDL_EventType
+            SDL_Event e; while(  SDL_PollEvent(&e)  )   // Handle the event queue
             {
-                switch(e.window.event)
-                { // See tag SDL_WindowEventID
+                // Quit with default OS stuff
+                if (  e.type == SDL_QUIT  ) quit = true;    // Alt-F4 / click X
 
-                    case SDL_WINDOWEVENT_RESIZED:
-                        SDL_GetWindowSize(win, &(wI.w), &(wI.h));
-                        break;
+                // Update window info if user resizes window
+                if (  e.type == SDL_WINDOWEVENT  )
+                {
+                    switch(e.window.event)
+                    { // See tag SDL_WindowEventID
 
-                    default: break;
+                        case SDL_WINDOWEVENT_RESIZED:
+                            SDL_GetWindowSize(win, &(wI.w), &(wI.h));
+                            break;
+
+                        default: break;
+                    }
                 }
-            }
 
-            // Keyboard controls
-            // TODO: add filtered control as movement example
-            if (  e.type == SDL_KEYDOWN  )
-            {
-                switch(e.key.keysym.sym)
-                { // See tag SDL_KeyCode
+                // Keyboard controls
+                if (  e.type == SDL_KEYDOWN  )
+                {
+                    switch(e.key.keysym.sym)
+                    { // See tag SDL_KeyCode
 
-                    case SDLK_q: quit = true; break;    // q : quit
-                    case SDLK_F11:                      // F11 : toggle fullscreen
-                        is_fullscreen = !is_fullscreen;
-                        if (is_fullscreen)
-                        { // Go fullscreen
-                            SDL_SetWindowFullscreen(win, SDL_WINDOW_FULLSCREEN);
-                        }
-                        else
-                        { // Go back to windowed
-                            SDL_SetWindowFullscreen(win, 0);
-                        }
-                        // Update state with latest window info
-                        SDL_GetWindowSize(win, &(wI.w), &(wI.h));
-                        break;
-
-                    case SDLK_SPACE:                    // Space : change colors
-                        if(  kmod&KMOD_SHIFT  ) Colors::prev(bgnd_color);
-                        else                    Colors::next(bgnd_color);
-                        fgnd_color = Colors::contrasts(bgnd_color);
-                        break;
-
-                    case SDLK_SLASH:                    // ? : Toggle help
-                        // TODO: draw text in this overlay
-                        if(  kmod&KMOD_SHIFT  ) show_overlay = !show_overlay;
-                        break;
-
-                    case SDLK_k:                        // k : up, faster, K : bigger
-                        if (GameDemo::RAT_CIRCLE)
-                        {
-                            using namespace RatCircle;
-
-                            if(  kmod&KMOD_SHIFT  )
-                            { // Increment RADIUS, clamp at window h
-                                int MAX = GameArt::rect.h/2;
-                                for(int i=0; i<NSPIN; i++)
-                                {
-                                    spinners[i]->RADIUS++;
-                                    if (spinners[i]->RADIUS > MAX) spinners[i]->RADIUS = MAX;
-                                    // Update points
-                                    spinners[i]->calc_circle_points();
-                                    if(0)
-                                    { // Compensate for increased radius with decreased speed
-                                        spinners[i]->speed--;
-                                        if (spinners[i]->speed==0) spinners[i]->speed=1;
-                                    }
-
-                                }
-                                if(0)
-                                {
-                                    ali->RADIUS++;
-                                    bob->RADIUS++;
-                                    if (ali->RADIUS > MAX) ali->RADIUS = MAX;
-                                    if (bob->RADIUS > MAX) bob->RADIUS = MAX;
-                                    // Update points
-                                    ali->calc_circle_points();
-                                    bob->calc_circle_points();
-                                }
+                        case SDLK_q: quit = true; break;    // q : quit
+                        case SDLK_F11:                      // F11 : toggle fullscreen
+                            is_fullscreen = !is_fullscreen;
+                            if (is_fullscreen)
+                            { // Go fullscreen
+                                SDL_SetWindowFullscreen(win, SDL_WINDOW_FULLSCREEN);
                             }
                             else
-                            { // Increment speed, clamp at MAX_SPEED
-                                for(int i=0; i<NSPIN; i++)
-                                {
-                                    spinners[i]->speed++;
-                                    if (spinners[i]->speed > MAX_SPEED) spinners[i]->speed = MAX_SPEED;
-                                }
-                                if(0)
-                                {
-                                    ali->speed++;
-                                    bob->speed++;
-                                    if (ali->speed > MAX_SPEED) ali->speed = MAX_SPEED;
-                                    if (bob->speed > MAX_SPEED) bob->speed = MAX_SPEED;
-                                }
+                            { // Go back to windowed
+                                SDL_SetWindowFullscreen(win, 0);
                             }
-                        }
-                        if (GameDemo::BLOB)
-                        {
-                            if(  kmod&KMOD_SHIFT  ) flag_bigger = true;
-                            else                    flag_up = true;
-                        }
-                        break;
-                    case SDLK_j:                        // j : down, slower, J : smaller
-                        if (GameDemo::RAT_CIRCLE)
-                        {
-                            using namespace RatCircle;
+                            // Update state with latest window info
+                            SDL_GetWindowSize(win, &(wI.w), &(wI.h));
+                            break;
 
-                            if(  kmod&KMOD_SHIFT  )
-                            { // Decrement RADIUS, clamp at 4
+                        case SDLK_SPACE:                // Space : change colors
+                            if(  kmod&KMOD_SHIFT  ) Colors::prev(bgnd_color);
+                            else                    Colors::next(bgnd_color);
+                            fgnd_color = Colors::contrasts(bgnd_color);
+                            break;
 
-                                for(int i=0; i<NSPIN; i++)
-                                {
-                                    spinners[i]->RADIUS--;
-                                    int MIN = 2;
-                                    if (spinners[i]->RADIUS<MIN) spinners[i]->RADIUS=MIN;
-                                    // Update points
-                                    spinners[i]->calc_circle_points();
-                                    if (0)
-                                    { // Compensate for decreased radius with increased speed
+                        case SDLK_SLASH:                // ? : Toggle help
+                                                        // TODO: draw text in this overlay
+                            if(  kmod&KMOD_SHIFT  ) show_overlay = !show_overlay;
+                            break;
+
+                        case SDLK_k:                    // k : up, faster, K : bigger
+                            if (GameDemo::RAT_CIRCLE)
+                            {
+                                using namespace RatCircle;
+
+                                if(  kmod&KMOD_SHIFT  )
+                                { // Increment RADIUS, clamp at window h
+                                    int MAX = GameArt::rect.h/2;
+                                    for(int i=0; i<NSPIN; i++)
+                                    {
+                                        spinners[i]->RADIUS++;
+                                        if (spinners[i]->RADIUS > MAX) spinners[i]->RADIUS = MAX;
+                                        // Update points
+                                        spinners[i]->calc_circle_points();
+                                        if(0)
+                                        { // Compensate for increased radius with decreased speed
+                                            spinners[i]->speed--;
+                                            if (spinners[i]->speed==0) spinners[i]->speed=1;
+                                        }
+
+                                    }
+                                    if(0)
+                                    {
+                                        ali->RADIUS++;
+                                        bob->RADIUS++;
+                                        if (ali->RADIUS > MAX) ali->RADIUS = MAX;
+                                        if (bob->RADIUS > MAX) bob->RADIUS = MAX;
+                                        // Update points
+                                        ali->calc_circle_points();
+                                        bob->calc_circle_points();
+                                    }
+                                }
+                                else
+                                { // Increment speed, clamp at MAX_SPEED
+                                    for(int i=0; i<NSPIN; i++)
+                                    {
                                         spinners[i]->speed++;
                                         if (spinners[i]->speed > MAX_SPEED) spinners[i]->speed = MAX_SPEED;
                                     }
-                                }
-                                if(0)
-                                {
-                                    ali->RADIUS--;
-                                    bob->RADIUS--;
-                                    int MIN = 2;
-                                    if (ali->RADIUS<MIN) ali->RADIUS=MIN;
-                                    if (bob->RADIUS<MIN) bob->RADIUS=MIN;
-                                    // Update points
-                                    ali->calc_circle_points();
-                                    bob->calc_circle_points();
+                                    if(0)
+                                    {
+                                        ali->speed++;
+                                        bob->speed++;
+                                        if (ali->speed > MAX_SPEED) ali->speed = MAX_SPEED;
+                                        if (bob->speed > MAX_SPEED) bob->speed = MAX_SPEED;
+                                    }
                                 }
                             }
-                            else
-                            { // Decrement speed, clamp at 1
-                                for(int i=0; i<NSPIN; i++)
-                                {
-                                    spinners[i]->speed--;
-                                    if (spinners[i]->speed==0) spinners[i]->speed=1;
+                            if (GameDemo::BLOB)         // Demo tile-based-game "up"
+                            {
+                                if(  kmod&KMOD_SHIFT  ) flag_bigger = true;
+                                else                    flag_up = true;
+                            }
+                            break;
+
+                        case SDLK_j:                    // j : down, slower, J : smaller
+                            if (GameDemo::RAT_CIRCLE)
+                            {
+                                using namespace RatCircle;
+
+                                if(  kmod&KMOD_SHIFT  )
+                                { // Decrement RADIUS, clamp at 4
+
+                                    for(int i=0; i<NSPIN; i++)
+                                    {
+                                        spinners[i]->RADIUS--;
+                                        int MIN = 2;
+                                        if (spinners[i]->RADIUS<MIN) spinners[i]->RADIUS=MIN;
+                                        // Update points
+                                        spinners[i]->calc_circle_points();
+                                        if (0)
+                                        { // Compensate for decreased radius with increased speed
+                                            spinners[i]->speed++;
+                                            if (spinners[i]->speed > MAX_SPEED) spinners[i]->speed = MAX_SPEED;
+                                        }
+                                    }
+                                    if(0)
+                                    {
+                                        ali->RADIUS--;
+                                        bob->RADIUS--;
+                                        int MIN = 2;
+                                        if (ali->RADIUS<MIN) ali->RADIUS=MIN;
+                                        if (bob->RADIUS<MIN) bob->RADIUS=MIN;
+                                        // Update points
+                                        ali->calc_circle_points();
+                                        bob->calc_circle_points();
+                                    }
                                 }
-                                if(0)
-                                {
-                                    ali->speed--;
-                                    bob->speed--;
-                                    if (ali->speed==0) ali->speed=1;
-                                    if (bob->speed==0) bob->speed=1;
+                                else
+                                { // Decrement speed, clamp at 1
+                                    for(int i=0; i<NSPIN; i++)
+                                    {
+                                        spinners[i]->speed--;
+                                        if (spinners[i]->speed==0) spinners[i]->speed=1;
+                                    }
+                                    if(0)
+                                    {
+                                        ali->speed--;
+                                        bob->speed--;
+                                        if (ali->speed==0) ali->speed=1;
+                                        if (bob->speed==0) bob->speed=1;
+                                    }
                                 }
                             }
-                        }
-                        if (GameDemo::BLOB)
-                        {
-                            if(  kmod&KMOD_SHIFT  ) flag_smaller = true;
-                            else                    flag_down = true;
-                        }
-                        break;
-                    default: break;
+                            if (GameDemo::BLOB)         // Demo tile-based-game "down"
+                            {
+                                if(  kmod&KMOD_SHIFT  ) flag_smaller = true;
+                                else                    flag_down = true;
+                            }
+                            break;
+
+                        case SDLK_h:                    // h : left
+                             if (GameDemo::BLOB) flag_left = true; // Demo tile-based-game "left"
+                             break;
+
+                        case SDLK_l:                    // l : right
+                             if (GameDemo::BLOB) flag_right = true; // Demo tile-based-game "right"
+                             break;
+
+                        default: break;
+                    }
                 }
             }
         }
-
+        { // Filtered : for platformer-style WASD
+            SDL_PumpEvents();
+            const Uint8 *k = SDL_GetKeyboardState(NULL);
+            if (GameDemo::BLOB)
+            { // WASD
+                if(  k[SDL_SCANCODE_W]  ) flag_up = true;
+                if(  k[SDL_SCANCODE_A]  ) flag_left = true;
+                if(  k[SDL_SCANCODE_S]  ) flag_down = true;
+                if(  k[SDL_SCANCODE_D]  ) flag_right = true;
+            }
+        }
         /////////////////
         // PHYSICS UPDATE
         /////////////////
@@ -779,36 +828,8 @@ int main(int argc, char* argv[])
             }
         }
 
-        ////////////
-        // RENDERING
-        ////////////
-
-        ///////////
-        // GAME ART
-        ///////////
-
-        // Default is to render to the OS window.
-        // Render game art stuff to the GameArt texture instead.
-        SDL_SetRenderTarget(ren, GameArt::tex);
-
-        { // Background color
-            SDL_Color c = Colors::list[bgnd_color];
-            SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
-            SDL_RenderClear(ren);
-        }
-        SDL_FRect border;                               // Use this in later blocks
-        { // Border
-            float W = static_cast<float>(GameArt::rect.w);
-            float H = static_cast<float>(GameArt::rect.h);
-            float M = 0.01*W;                           // M : Margin in pixels
-            border = {.x=M, .y=M, .w=W-2*M, .h=H-2*M};
-            SDL_Color c = Colors::list[fgnd_color];
-            // Render
-            SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
-            SDL_RenderDrawRectF(ren, &border);
-        }
         if(  GameDemo::BLOB  )
-        { // Draw the circle specified by Blob::center and Blob::radius
+        {
             { // Handle UI flags
                 if(flag_smaller)
                 { // Decrease blob radius
@@ -823,16 +844,27 @@ int main(int argc, char* argv[])
                     float MAX = GameArt::rect.w/4;
                     if (Blob::radius >=MAX) Blob::radius = MAX;
                 }
-                // Note: speed of moving up/down depends on radius
+                // Note: speed of moving up/down/left/right depends on radius
+                const float move_amount = Blob::radius/4;
                 if(flag_down)
                 { // Move blob down
                     flag_down = false;
-                    Blob::center.y += Blob::radius/4;
+                    Blob::center.y += move_amount;
                 }
                 if(flag_up)
                 { // Move blob up
                     flag_up = false;
-                    Blob::center.y -= Blob::radius/4;
+                    Blob::center.y -= move_amount;
+                }
+                if(flag_left)
+                { // Move blob left
+                    flag_left = false;
+                    Blob::center.x -= move_amount;
+                }
+                if(flag_right)
+                { // Move blob right
+                    flag_right = false;
+                    Blob::center.x += move_amount;
                 }
             }
             { // Make the circle
@@ -893,26 +925,61 @@ int main(int argc, char* argv[])
                 // Same for debug circle
                 Blob::points_debug[Blob::FULL-1] = Blob::points_debug[0];
             }
+        }
+        ////////////
+        // RENDERING
+        ////////////
+
+        ///////////
+        // GAME ART
+        ///////////
+
+        // Default is to render to the OS window.
+        // Render game art stuff to the GameArt texture instead.
+        SDL_SetRenderTarget(ren, GameArt::tex);
+
+        { // Background color
+            SDL_Color c = Colors::list[bgnd_color];
+            SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
+            SDL_RenderClear(ren);
+        }
+        SDL_FRect border;                               // Use this in later blocks
+        { // Border
+            float W = static_cast<float>(GameArt::rect.w);
+            float H = static_cast<float>(GameArt::rect.h);
+            float M = 0.01*W;                           // M : Margin in pixels
+            border = {.x=M, .y=M, .w=W-2*M, .h=H-2*M};
+            SDL_Color c = Colors::list[fgnd_color];
+            // Render
+            SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
+            SDL_RenderDrawRectF(ren, &border);
+        }
+        if(  GameDemo::BLOB  )
+        { // Draw the circle specified by Blob::center and Blob::radius
             if (  show_overlay  )
             { // Debug overlay -- expect circle in center of jiggle
                 { // Pick an obvious debug color, but make it a little transparent
-                    SDL_SetRenderDrawColor(ren, 100, 255, 100, 255>>1);
+                    SDL_SetRenderDrawColor(ren, 100, 255, 100, 255/(1<<1));
                 }
                 { // Draw blob points without jiggle, connect with lines
                     SDL_RenderDrawLinesF(ren, Blob::points_debug, Blob::FULL);
                 }
             }
-            { // Use foreground color TODO: pick a different color for game art?
-                SDL_Color c = Colors::list[fgnd_color];
-                SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
-            }
-                if (0)
-                { // Draw points only
-                    SDL_RenderDrawPointsF(ren, Blob::points, Blob::FULL);    // Render the circle
-                }
                 if (1)
                 { // Connects points with lines
-                    SDL_RenderDrawLinesF(ren, Blob::points, Blob::FULL);   // Render the circle
+                    { // Use tardis blue with transparency
+                        SDL_Color c = Colors::tardis;
+                        SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a/(1<<1));
+                    }
+                    SDL_RenderDrawLinesF(ren, Blob::points, Blob::FULL);    // Render the circle
+                }
+                if (1)
+                { // Draw points
+                    { // Use foreground color
+                        SDL_Color c = Colors::list[fgnd_color];
+                        SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
+                    }
+                    SDL_RenderDrawPointsF(ren, Blob::points, Blob::FULL);   // Render the circle
                 }
             if (0) // Draw a quick throwaway rectangle to get going
             { // Draw a filled rect
@@ -999,13 +1066,13 @@ int main(int argc, char* argv[])
         { // Overlay help
             { // Darken light stuff
                 SDL_Color c = Colors::coal;
-                SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a>>1); // 50% darken
+                SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a/(1<<1)); // 50% darken
                 SDL_Rect rect = {.x=0, .y=0, .w=GameArt::rect.w, .h=100};
                 SDL_RenderFillRect(ren, &rect);             // Draw filled rect
             }
             { // Lighten dark stuff
                 SDL_Color c = Colors::snow;
-                SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a>>3); // 12% lighten
+                SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a/(1<<3)); // 12% lighten
                 SDL_Rect rect = {.x=0, .y=0, .w=GameArt::rect.w, .h=100};
                 SDL_RenderFillRect(ren, &rect);             // Draw filled rect
             }

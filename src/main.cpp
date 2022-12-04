@@ -170,10 +170,10 @@ namespace GameArt
     ////////////////
     // CHUNKY PIXELS
     ////////////////
-                                                        //      scale -----  Try scale=10, 20, 30, etc.
-                                                        //                |
-                                                        //                v
-    constexpr int scale = 40;                           // Ex: 320:180 = 20*(16:9)
+                                                        //      scale <----  Try scale=10, 20, 40, 60, 80
+                                                        //      |  10: max chunky! 20: retro game
+                                                        //      v  80: high-res
+    constexpr int scale = 80;                           // Ex: 20*(16:9) = 320:180
     constexpr SDL_Rect rect = {.x=0, .y=0, .w=scale*16, .h=scale*9}; // Game art has a 16:9 aspect ratio
     SDL_Texture* tex;                                   // Render game art to this texture
 }
@@ -184,7 +184,9 @@ namespace GameDemo
     //////////////////////////
 
     constexpr bool RAINBOW_STATIC = false;
-    constexpr bool RAT_CIRCLE = true;                   // Rational parametrization of a circle
+    constexpr bool RAT_CIRCLE = true;                  // Rational parametrization of a circle
+    constexpr bool BLOB = false;                         // Be an ameoba-plasma-ball-thing (uses RatCircle)
+    constexpr bool FIT_CURVE = false;                   // Fit a curve with dCB quadratics
 }
 
 SDL_Rect center_src_in_win(const SDL_Rect& winrect, const SDL_Rect& srcrect)
@@ -347,27 +349,27 @@ namespace RatCircle
         uint16_t speed;                     // Counter increments per video frame; controlled by j/k
         int N, COUNT;                       // N points in a quarter circle, COUNT is 4*N
         float center_x; float center_y;     // Circle center
-        uint8_t RADIUS;                         // Circle size
+        uint8_t RADIUS;                     // Circle size
 
         ////////////
         // FUNCTIONS
         ////////////
 
         Spinner(float, float, uint8_t, uint16_t, uint16_t);   // Setup initial values and allocate memory
-        void calc_circle_points(void);              // Initial circle points calc
-        void increase_resolution(void);             // Increment number of points in circle
-        void decrease_resolution(void);             // Decrement number of points in circle
+        void calc_circle_points(void);      // Initial circle points calc
+        void increase_resolution(void);     // Increment number of points in circle
+        void decrease_resolution(void);     // Decrement number of points in circle
     };
     Spinner::Spinner(float x, float y, uint8_t r, uint16_t s, uint16_t p)
     { // Initial spinner values and memory for points in circle
         //////////////////
         // SPIN PARAMETERS
         //////////////////
-        center_x = x;                   // GameArt::rect.w/2 : offset x to game art center
-        center_y = y;                   // GameArt::rect.h/2 : offset y to game art center
-        RADIUS = r;                     // 32 : Scale up points calc by factor RADIUS
-        speed = s;                      // 1-MAX_SPEED : number of physics frames per video frame
-        counter = p;                    // 0 : start spinning from first point in circle
+        center_x = x;                       // GameArt::rect.w/2 : offset x to game art center
+        center_y = y;                       // GameArt::rect.h/2 : offset y to game art center
+        RADIUS = r;                         // 32 : Scale up points calc by factor RADIUS
+        speed = s;                          // 1-MAX_SPEED : number of physics frames per video frame
+        counter = p;                        // 0 : start spinning from first point in circle
         /////////////////
         // SPIN INTERNALS
         /////////////////
@@ -427,6 +429,27 @@ namespace RatCircle
 
 }
 
+namespace Blob
+{ // A RatCircle with jiggley points
+
+    // Specify the circle the Blob is based on
+    SDL_FPoint center;
+    float radius;
+
+    // A Blob is a RatCircle with jiggly points
+    constexpr float JIGAMT = 0.1;                       // Jiggle amount: [0:1]
+                                                        //
+    // Set the number of points in the RatCircle here
+    //         ----------------
+    //                   |
+    //                   |----(work in powers of 2, 2^3 is good)
+    //                   v
+    constexpr int N = 1<<3;                             // Num points in quarter-circle
+    constexpr int FULL = N*4;                           // Num points in full-circle
+    SDL_FPoint* points;                                 // The jiggly circle points
+    SDL_FPoint* points_debug;                           // Circle points without jiggle
+}
+
 int main(int argc, char* argv[])
 {
     ////////
@@ -436,7 +459,7 @@ int main(int argc, char* argv[])
     std::srand(std::time(0));                           // Seed RNG with current time
     WindowInfo wI(argc, argv);
     if (DEBUG) printf("Window info: %d x %d at %d,%d\n", wI.w, wI.h, wI.x, wI.y);
-    if (DEBUG) printf("Number of colors: %ld\n", sizeof(Colors::list)/sizeof(SDL_Color));
+    if (DEBUG) printf("Number of colors in palette: %ld\n", sizeof(Colors::list)/sizeof(SDL_Color));
     { // SDL Setup
         SDL_Init(SDL_INIT_VIDEO|SDL_INIT_AUDIO);
         win = SDL_CreateWindow(argv[0], wI.x, wI.y, wI.w, wI.h, wI.flags);
@@ -474,13 +497,19 @@ int main(int argc, char* argv[])
     // Must initialize bool as true or false to avoid garbage!
     // I use {} (the default initializer) to imply any valid initial value is OK.
     bool show_overlay{};                                // Help on/off
+    bool flag_smaller{};                                // Pressed key for smaller
+    bool flag_bigger{};                                 // Pressed key for bigger
+    bool flag_down{};                                   // Pressed key for down
+    bool flag_up{};                                     // Pressed key for up
 
-    RatCircle::Spinner *ali, *bob;                      // Example code
+    // RAT_CIRCLE demo -- globals
+    RatCircle::Spinner *ali, *bob;                      // Example code for individual spinners
     constexpr int NSPIN = 1<<12;                        // Number of spinners on screen: BIG number
-    constexpr int NTRAIL = 25;                           // Number of pixels in spinner trail : 1 - 25
-    RatCircle::Spinner *spinners[NSPIN];
+    constexpr int NTRAIL = 25;                          // Number of pixels in spinner trail : 1 - 25
+    RatCircle::Spinner *spinners[NSPIN];                // Just a giant array of pointers
+
     if (GameDemo::RAT_CIRCLE)
-    {
+    { // Allocate memory for spinners only if RAT_CIRCLE==true
         SDL_FRect border;
         { // Spawn spinners within this border
             float W = static_cast<float>(GameArt::rect.w);
@@ -519,6 +548,22 @@ int main(int argc, char* argv[])
         }
     }
 
+    // BLOB demo -- globals
+
+    if (GameDemo::BLOB)
+    {
+        // Initial blob center: center of game window
+        Blob::center = SDL_FPoint{
+            .x=static_cast<float>(GameArt::rect.w/2),
+            .y=static_cast<float>(GameArt::rect.h/2)
+        };
+        // Initial radius: tiny fraction of the game window width
+        Blob::radius = static_cast<float>(GameArt::rect.w/64);
+        // Allocate memory for the points in the blob shape
+        Blob::points = (SDL_FPoint*)malloc(sizeof(SDL_FPoint) * Blob::FULL);
+        // Allocate memory to draw points without jiggle (for debug purposes)
+        Blob::points_debug = (SDL_FPoint*)malloc(sizeof(SDL_FPoint) * Blob::FULL);
+    }
     if (0)
     { // Debugging my Spinner constructor
         if (DEBUG) printf(  "Bob info:\n"
@@ -594,7 +639,7 @@ int main(int argc, char* argv[])
                         if(  kmod&KMOD_SHIFT  ) show_overlay = !show_overlay;
                         break;
 
-                    case SDLK_k:                        // k : faster, K : bigger
+                    case SDLK_k:                        // k : up, faster, K : bigger
                         if (GameDemo::RAT_CIRCLE)
                         {
                             using namespace RatCircle;
@@ -642,8 +687,13 @@ int main(int argc, char* argv[])
                                 }
                             }
                         }
+                        if (GameDemo::BLOB)
+                        {
+                            if(  kmod&KMOD_SHIFT  ) flag_bigger = true;
+                            else                    flag_up = true;
+                        }
                         break;
-                    case SDLK_j:                        // j : slower, J : smaller
+                    case SDLK_j:                        // j : down, slower, J : smaller
                         if (GameDemo::RAT_CIRCLE)
                         {
                             using namespace RatCircle;
@@ -691,6 +741,11 @@ int main(int argc, char* argv[])
                                     if (bob->speed==0) bob->speed=1;
                                 }
                             }
+                        }
+                        if (GameDemo::BLOB)
+                        {
+                            if(  kmod&KMOD_SHIFT  ) flag_smaller = true;
+                            else                    flag_down = true;
                         }
                         break;
                     default: break;
@@ -751,6 +806,123 @@ int main(int argc, char* argv[])
             // Render
             SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
             SDL_RenderDrawRectF(ren, &border);
+        }
+        if(  GameDemo::BLOB  )
+        { // Draw the circle specified by Blob::center and Blob::radius
+            { // Handle UI flags
+                if(flag_smaller)
+                { // Decrease blob radius
+                    flag_smaller = false;
+                    Blob::radius--;
+                    if (Blob::radius <=2) Blob::radius = 2;
+                }
+                if(flag_bigger)
+                { // Increase blob radius
+                    flag_bigger = false;
+                    Blob::radius++;
+                    float MAX = GameArt::rect.w/4;
+                    if (Blob::radius >=MAX) Blob::radius = MAX;
+                }
+                // Note: speed of moving up/down depends on radius
+                if(flag_down)
+                { // Move blob down
+                    flag_down = false;
+                    Blob::center.y += Blob::radius/4;
+                }
+                if(flag_up)
+                { // Move blob up
+                    flag_up = false;
+                    Blob::center.y -= Blob::radius/4;
+                }
+            }
+            { // Make the circle
+                for(int i=0; i<Blob::N; i++)
+                { // Make a quarter circle
+
+                    /////////////////////////////////////
+                    // FIND RATIONAL POINTS ON THE CIRCLE
+                    /////////////////////////////////////
+                    Blob::points[i] = SDL_FPoint{
+                        .x=RatCircle::x(i,Blob::N),
+                        .y=RatCircle::y(i,Blob::N)
+                    };
+                    // Same for debug circle
+                    Blob::points_debug[i] = SDL_FPoint{
+                        .x=RatCircle::x(i,Blob::N),
+                        .y=RatCircle::y(i,Blob::N)
+                    };
+
+                    //////////////////////
+                    // JIGGLE THOSE POINTS
+                    //////////////////////
+                    // At this point in the circle-making, each point's x&y are still in range [0,1].
+
+                    // Get a random float from -0.5 to 0.5
+                    float jiggle = (static_cast<float>(std::rand()) / RAND_MAX) - 0.5;
+                    // And scale it by JIGAMT
+                    Blob::points[i].x += Blob::JIGAMT*jiggle;
+                    Blob::points[i].y += Blob::JIGAMT*jiggle;
+                }
+                for(int i=Blob::N; i<Blob::FULL; i++)
+                { // Make the other three-quarters of the circle
+                  // Next point is N indices back, rotated a quarter-circle
+                    Blob::points[i]       = SDL_FPoint{
+                        .x=-1*Blob::points[i-Blob::N].y,
+                        .y=   Blob::points[i-Blob::N].x
+                    };
+                    // Same for debug circle
+                    Blob::points_debug[i] = SDL_FPoint{
+                        .x=-1*Blob::points_debug[i-Blob::N].y,
+                        .y=   Blob::points_debug[i-Blob::N].x
+                    };
+                }
+                for(int i=0; i<Blob::FULL; i++)
+                { // Scale circle by radius and offset by center
+                    Blob::points[i] = SDL_FPoint{
+                        .x = (Blob::radius * Blob::points[i].x) + Blob::center.x,
+                        .y = (Blob::radius * Blob::points[i].y) + Blob::center.y
+                    };
+                    // Same for debug circle
+                    Blob::points_debug[i] = SDL_FPoint{
+                        .x = (Blob::radius * Blob::points_debug[i].x) + Blob::center.x,
+                        .y = (Blob::radius * Blob::points_debug[i].y) + Blob::center.y
+                    };
+                }
+                // Set final point = initial point to close the shape (for DrawLines)
+                Blob::points[Blob::FULL-1] = Blob::points[0];
+                // Same for debug circle
+                Blob::points_debug[Blob::FULL-1] = Blob::points_debug[0];
+            }
+            if (  show_overlay  )
+            { // Debug overlay -- expect circle in center of jiggle
+                { // Pick an obvious debug color, but make it a little transparent
+                    SDL_SetRenderDrawColor(ren, 100, 255, 100, 255>>1);
+                }
+                { // Draw blob points without jiggle, connect with lines
+                    SDL_RenderDrawLinesF(ren, Blob::points_debug, Blob::FULL);
+                }
+            }
+            { // Use foreground color TODO: pick a different color for game art?
+                SDL_Color c = Colors::list[fgnd_color];
+                SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
+            }
+                if (0)
+                { // Draw points only
+                    SDL_RenderDrawPointsF(ren, Blob::points, Blob::FULL);    // Render the circle
+                }
+                if (1)
+                { // Connects points with lines
+                    SDL_RenderDrawLinesF(ren, Blob::points, Blob::FULL);   // Render the circle
+                }
+            if (0) // Draw a quick throwaway rectangle to get going
+            { // Draw a filled rect
+                SDL_Rect rect = {
+                    .x=GameArt::rect.w/2,
+                    .y=GameArt::rect.h/2,
+                    .w=10, .h=10
+                };
+                SDL_RenderFillRect(ren, &rect);
+            }
         }
         if(  GameDemo::RAT_CIRCLE  )
         {
@@ -875,6 +1047,12 @@ int main(int argc, char* argv[])
             free(bob->points);
             delete bob;
         }
+    }
+    if (GameDemo::BLOB)
+    { // Free the array of blob points
+        free(Blob::points);
+        free(Blob::points_debug);
+
     }
 
     shutdown();

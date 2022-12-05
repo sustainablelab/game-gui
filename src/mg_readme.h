@@ -446,14 +446,24 @@
  *
  * ((1-λ)*(1-λ) * P0) + ((2*λ)*(1-λ) * P1) + ((λ*λ) * P2)
  *
- * Remember λ is a value from [0:1], so all of the coefficients evaluate to scalars.
+ * This is:
+ *
+ * (1 - 2λ +  λ^2) * P0 + (2λ - 2λ^2) * P1 + (λ^2)*P2
+ *
+ * Remember λ is a value from [0:1], so for a specific value of λ,
+ * all of the coefficients evaluate to scalars:
+ *
+ * a*P0 + b*P1 + c*P2
  *
  * Define multiplication of a point by a scalar as K*[x,y] = [K*x,K*y]
  *
  * Again, at this point, I can calculate points on the curve if for some reason this form
  * were more useful. But lets keep going!
  *
- * The coefficients are Bernstein polynomials of degree two.
+ * The coefficients are Bernstein polynomials of degree two. There are three such
+ * polynomials, B02, B12, and B22. The first number indicates with control point they are
+ * the coefficient for. The second number indicates degree two.
+ *
  * Expand these polynomials and write down all powers of λ, even if its coefficient is zero.
  *
  * - Coefficient of P0: (1-λ)*(1-λ) = 1*(λ^0) - 2*(λ^1) + 1*(λ^2)
@@ -510,7 +520,9 @@
  * control points.
  *
  * With B precomputed, and with list of points P0, P1, P2, I think it is computationally
- * cheap enough to do the matrix multiplication P x B every time I want the curve.
+ * cheap enough to do the matrix multiplication {P0,P1,P2} x B every time I want the curve.
+ *
+ * {P0,P1,P2} is 1x3 and B is 3xK, so I end up with a 1xK.
  *
  * For example, instead of the physics loop calculating all curves and storing that result
  * for the rendering loop, the physics loop can just operate on the control points P0, P1,

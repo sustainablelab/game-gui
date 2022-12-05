@@ -883,7 +883,8 @@ int main(int argc, char* argv[])
             }
         }
         if(  GameDemo::GEN_CURVE  )
-        {
+        if (0)
+        { // Method 1: Calculate dCB curve directly from the convex affine combinations
             constexpr int ORDER = 2;                    // 2nd-order dCB curve
             constexpr int NC = ORDER+1;                 // 2nd-order has 3 control points
             SDL_FPoint control_points[NC];              // dCB control points
@@ -933,14 +934,14 @@ int main(int argc, char* argv[])
                         SDL_Color c = Colors::list[fgnd_color];
                         SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
                     }
-                    SDL_RenderDrawPointsF(ren, points, K);
+                    SDL_RenderDrawLinesF(ren,points,K);
                 }
                 { // Render as lime points
                     { // Use lime color
                         SDL_Color c = Colors::lime;
                         SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
                     }
-                    SDL_RenderDrawLinesF(ren,points,K);
+                    SDL_RenderDrawPointsF(ren, points, K);
                 }
             }
             { // Draw the JOIN segment of each pair of control points in tardis blue
@@ -968,6 +969,104 @@ int main(int argc, char* argv[])
                 constexpr float y_top = OFFSET_Y - H/2;
                 SDL_FRect rect = { .x=x_left, .y=y_top, .w=W, .h=H };
                 SDL_RenderDrawRectF(ren, &rect);
+            }
+        }
+        if (1)
+        { // Method 2: dCB curve is matrix product of control points and pre-computed B matrix (NC rows x K cols)
+            constexpr int ORDER = 2;                    // 2nd-order dCB curve
+            constexpr int NC = ORDER+1;                 // 'N'umber of 'C'ontrol points
+            constexpr int K = 128;                      // Sample curve at K points
+            // Define Bmatrix: evaluate the three Bernstein λ-Polynomials at all K values of λ
+            // TODO: Make Bmatrix global and only calculate this once!
+            float B0[K]{}; float B1[K]{}; float B2[K]{}; // Zero-initialize the Bmatrix
+            float* Bmatrix[NC] = {B0,B1,B2};            // Bmatrix is size (NC rows x K cols)
+            { // Calculate B = P*T
+                // Define Pmatrix: matrix of degree 2 Bernstein λ-Polynomial Coefficients
+                // TODO: make this a global
+                constexpr float B_02[NC] = {1, -2,  1}; // 1 - 2λ +  λ^2
+                constexpr float B_12[NC] = {0,  2, -2}; // 0 + 2λ - 2λ^2
+                constexpr float B_22[NC] = {0,  0,  1}; // 0 + 0λ +  λ^2
+                const float* Pmatrix[NC] = {B_02,B_12,B_22};
+                // Define Tmatrix: matrix of K values for each power of λ
+                float T_0[K];                               // λ^0
+                for (int i=0; i<K; i++)
+                {
+                    T_0[i] = 1;
+                }
+                float T_1[K];                               // λ^1
+                for (int i=0; i<K; i++)
+                {
+                    float t = static_cast<float>(i)/static_cast<float>(K);
+                    T_1[i] = t;
+                }
+                float T_2[K];                               // λ^2
+                for (int i=0; i<K; i++)
+                {
+                    float t = static_cast<float>(i)/static_cast<float>(K);
+                    T_2[i] = t*t;
+                }
+                float* Tmatrix[NC] = {T_0, T_1, T_2};     // Tmatrix is size (NC rows x K cols)
+                { // Matrix multiplication: P * T = B     // (NC rows x NC cols) x (NC rows x K cols)
+                    for (int i=0; i<NC; i++)                    // i : row of Pmatrix
+                    { // Iterate over rows of Pmatrix
+                        for (int k=0; k<K; k++)                 // k : column of Tmatrix
+                        { // For each row of Pmatrix, iterate over columns of Tmatrix
+                            for (int j=0; j<NC; j++)            // j : walk ith row of P and kth col of T
+                            { // Find entry Bik = Pi0*T0k + Pi1*T1k + Pi2*T2k
+                                Bmatrix[i][k] += Pmatrix[i][j]*Tmatrix[j][k];
+                            }
+                        }
+                    }
+                }
+            }
+            // Calculate points on the dCB curve from the Bmatrix and the control points
+            SDL_FPoint control_points[NC];              // dCB control points
+            { // Generate three random control points
+                for(int i=0; i<NC; i++)
+                {
+                    constexpr float MAX = static_cast<float>(RAND_MAX);
+                    control_points[i].x = (std::rand()/MAX) - 0.5;
+                    control_points[i].y = (std::rand()/MAX) - 0.5;
+                }
+                // TODO: move scale and offset to physics loop
+                // Scale and offset points:
+                constexpr int SCALE = GameArt::rect.w/2;
+                constexpr float OFFSET_X = GameArt::rect.w/2;
+                constexpr float OFFSET_Y = GameArt::rect.h/2;
+                for(int i=0;i<NC;i++)
+                {
+                    control_points[i].x *= SCALE;
+                    control_points[i].y *= SCALE;
+                    control_points[i].x += OFFSET_X;
+                    control_points[i].y += OFFSET_Y;
+                }
+            }
+            SDL_FPoint points[K];                       // dCB curve points
+            { // Calculate points = control_points*Bmatrix
+                // Matrix multiplication: {P0,P1,P2} * B = curve // (1 rows x NC cols) x (NC rows x K cols)
+                for (int k=0; k<K; k++)                 // k : column of B matrix
+                { // Iterate over columns of Bmatrix
+                    points[k]=SDL_FPoint{0,0};          // clear out old value
+                    for (int j=0; j<NC; j++)            // j : walk control points and kth col of B
+                    { // Find kth point = control_points[j]*B[j][k]
+                        points[k].x += control_points[j].x*Bmatrix[j][k];
+                        points[k].y += control_points[j].y*Bmatrix[j][k];
+                    }
+                }
+                { // Render as lines in foreground color
+                    { // Use foreground color
+                        SDL_Color c = Colors::list[fgnd_color];
+                        SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
+                    }
+                    SDL_RenderDrawLinesF(ren,points,K);
+                }
+                { // Render as lime points
+                    { // Use lime color
+                        SDL_Color c = Colors::lime;
+                        SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
+                    }
+                    SDL_RenderDrawPointsF(ren, points, K);
+                }
             }
         }
         if(  show_overlay  )

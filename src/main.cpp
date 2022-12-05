@@ -884,14 +884,23 @@ int main(int argc, char* argv[])
         }
         if(  GameDemo::GEN_CURVE  )
         {
-            float x = GameArt::rect.w/2;
-            float y = GameArt::rect.h/2;
             constexpr int ORDER = 2;                    // 2nd-order dCB curve
             constexpr int NC = ORDER+1;                 // 2nd-order has 3 control points
-            SDL_FPoint P0 = {.x=x-50, .y=y+20};
-            SDL_FPoint P1 = {.x=x,    .y=y-20};
-            SDL_FPoint P2 = {.x=x+50, .y=y+10};
+            SDL_FPoint P0 = {.x=-0.5,.y=0.6};
+            SDL_FPoint P1 = {.x=0,  .y=0};
+            SDL_FPoint P2 = {.x=0.4, .y=0.5};
             SDL_FPoint control_points[NC] = {P0, P1, P2};
+            // Scale and offset points:
+            constexpr int SCALE = GameArt::rect.w/2;
+            constexpr float OFFSET_X = GameArt::rect.w/2;
+            constexpr float OFFSET_Y = GameArt::rect.h/10;
+            for(int i=0;i<NC;i++)
+            {
+                control_points[i].x *= SCALE;
+                control_points[i].y *= SCALE;
+                control_points[i].x += OFFSET_X;
+                control_points[i].y += OFFSET_Y;
+            }
             constexpr int K = 128;                      // Sample curve at K points
             SDL_FPoint points[K];
             { // Draw the dCB curve as lime points and foreground lines
@@ -901,13 +910,13 @@ int main(int argc, char* argv[])
                     float t = static_cast<float>(i)/static_cast<float>(K);
                     // Q0 traces the JOIN (P0,P1)
                     SDL_FPoint Q0 = {
-                        .x=(1-t)*P0.x + t*P1.x,
-                        .y=(1-t)*P0.y + t*P1.y
+                        .x=(1-t)*control_points[0].x + t*control_points[1].x,
+                        .y=(1-t)*control_points[0].y + t*control_points[1].y
                     };
                     // Q1 traces the JOIN (P1,P2)
                     SDL_FPoint Q1 = {
-                        .x=(1-t)*P1.x + t*P2.x,
-                        .y=(1-t)*P1.y + t*P2.y
+                        .x=(1-t)*control_points[1].x + t*control_points[2].x,
+                        .y=(1-t)*control_points[1].y + t*control_points[2].y
                     };
                     // point traces the JOIN (Q0,Q1)
                     points[i] = {

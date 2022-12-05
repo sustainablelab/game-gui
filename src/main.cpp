@@ -26,7 +26,7 @@ namespace GameArt
                                                         //      scale <----  Try scale=10, 20, 40, 60, 80
                                                         //      |  10: max chunky! 20: retro game
                                                         //      v  80: high-res
-    constexpr int scale = 20;                           // Ex: 20*(16:9) = 320:180
+    constexpr int scale = 80;                           // Ex: 20*(16:9) = 320:180
     constexpr SDL_Rect rect = {.x=0, .y=0, .w=scale*16, .h=scale*9}; // Game art has a 16:9 aspect ratio
     SDL_Texture* tex;                                   // Render game art to this texture
 
@@ -127,12 +127,15 @@ void shutdown(void)
     SDL_Quit();
 }
 
-////////////////////////////////////////////
-// CIRCLE ART USING RATIONAL PARAMETRIZATION
-////////////////////////////////////////////
-
+///////////////
+// GAME GLOBALS
+///////////////
 namespace RatCircle
 {
+    ////////////////////////////////////////////
+    // CIRCLE ART USING RATIONAL PARAMETRIZATION
+    ////////////////////////////////////////////
+
     /////////////
     // GAME STATE
     /////////////
@@ -435,9 +438,9 @@ int main(int argc, char* argv[])
     ////////////
     while (!quit)
     {
-        /////
-        // UI
-        /////
+        /////////////////////
+        // UI - EVENT HANDLER
+        /////////////////////
         SDL_Keymod kmod = SDL_GetModState();            // Check for modifier keys
         { // Polled : for tile-game WASD movement style
 
@@ -807,15 +810,6 @@ int main(int argc, char* argv[])
                     }
                     SDL_RenderDrawPointsF(ren, Blob::points, Blob::FULL);   // Render the circle
                 }
-            if (0) // Draw a quick throwaway rectangle to get going
-            { // Draw a filled rect
-                SDL_Rect rect = {
-                    .x=GameArt::rect.w/2,
-                    .y=GameArt::rect.h/2,
-                    .w=10, .h=10
-                };
-                SDL_RenderFillRect(ren, &rect);
-            }
         }
         if(  GameDemo::RAT_CIRCLE  )
         {
@@ -886,6 +880,82 @@ int main(int argc, char* argv[])
                 }
                 SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
                 SDL_RenderDrawPointsF(ren, points, COUNT);
+            }
+        }
+        if(  GameDemo::GEN_CURVE  )
+        {
+            float x = GameArt::rect.w/2;
+            float y = GameArt::rect.h/2;
+            constexpr int ORDER = 2;                    // 2nd-order dCB curve
+            constexpr int NC = ORDER+1;                 // 2nd-order has 3 control points
+            SDL_FPoint P0 = {.x=x-50, .y=y+20};
+            SDL_FPoint P1 = {.x=x,    .y=y-20};
+            SDL_FPoint P2 = {.x=x+50, .y=y+10};
+            SDL_FPoint control_points[NC] = {P0, P1, P2};
+            constexpr int K = 128;                      // Sample curve at K points
+            SDL_FPoint points[K];
+            { // Draw the dCB curve as lime points and foreground lines
+                // Generate the curve using convex affine combinations
+                for(int i=0; i<K; i++)
+                {
+                    float t = static_cast<float>(i)/static_cast<float>(K);
+                    // Q0 traces the JOIN (P0,P1)
+                    SDL_FPoint Q0 = {
+                        .x=(1-t)*P0.x + t*P1.x,
+                        .y=(1-t)*P0.y + t*P1.y
+                    };
+                    // Q1 traces the JOIN (P1,P2)
+                    SDL_FPoint Q1 = {
+                        .x=(1-t)*P1.x + t*P2.x,
+                        .y=(1-t)*P1.y + t*P2.y
+                    };
+                    // point traces the JOIN (Q0,Q1)
+                    points[i] = {
+                        .x=(1-t)*Q0.x + t*Q1.x,
+                        .y=(1-t)*Q0.y + t*Q1.y
+                    };
+                }
+                { // Render as lines in foreground color
+                    { // Use foreground color
+                        SDL_Color c = Colors::list[fgnd_color];
+                        SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
+                    }
+                    SDL_RenderDrawPointsF(ren, points, K);
+                }
+                { // Render as lime points
+                    { // Use lime color
+                        SDL_Color c = Colors::lime;
+                        SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
+                    }
+                    SDL_RenderDrawLinesF(ren,points,K);
+                }
+            }
+            { // Draw the JOIN segment of each pair of control points in tardis blue
+                { // Use tardis color
+                    SDL_Color c = Colors::tardis;
+                    SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
+                }
+                SDL_RenderDrawLinesF(ren,control_points,NC);
+            }
+            { // Draw the dCB curve control points in red/pink
+                { // Use dress color
+                    SDL_Color c = Colors::dress;
+                    SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
+                }
+                SDL_RenderDrawPointsF(ren,control_points,NC);
+            }
+            if (0) // Draw a quick throwaway rectangle to get going
+            { // Draw a filled rect
+                { // Use foreground color
+                    SDL_Color c = Colors::list[fgnd_color];
+                    SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
+                }
+                SDL_Rect rect = {
+                    .x=GameArt::rect.w/2,
+                    .y=GameArt::rect.h/2,
+                    .w=10, .h=10
+                };
+                SDL_RenderFillRect(ren, &rect);
             }
         }
         if(  show_overlay  )

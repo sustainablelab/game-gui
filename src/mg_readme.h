@@ -110,14 +110,28 @@
  *
  * Each section of the program is in ALL CAPS to make it easy to search for.
  *
+ * I turn the searches into vim shortcuts: ;1 through ;6.
+ * zM folds everything to the max, then the search puts my cursor on the line.
+ * zv unfolds as much as necessary to view the line.
+ * Then zt scrolls the view so that the line is at the top of the window.
+ *
+ * ```vim
+ * nnoremap <leader>1 zM/GAME GLOBALS<CR>zt
+ * nnoremap <leader>2 zM/SETUP<CR>zvzt
+ * nnoremap <leader>3 zM/INITIAL GAME STATE<CR>zvzt
+ * nnoremap <leader>4 zM/UI - EVENT HANDLER<CR>zvzt
+ * nnoremap <leader>5 zM/PHYSICS UPDATE<CR>zvzt
+ * nnoremap <leader>6 zM/RENDERING<CR>zvzt
+ * ```
+ *
  * - Globals
  *      - declare generic application global singletons: Window and Renderer
- *      - set up game-specific globals, organize them using C++ namespaces
+ *      - set up GAME GLOBALS (game-specific globals), organize them using C++ namespaces
  * - SETUP
  *      - seed the RNG
  *      - set up SDL
  *      - quit if there is something wrong with the computer
- *      - define an initial game state
+ *      - define an INITIAL GAME STATE
  * - GAME LOOP
  *      - Everything happens here!
  *          - I don't (explicitly) use threads
@@ -142,15 +156,27 @@
  *   then once I want to decouple it from VSYNC, I move it out to the physics section.
  *   So in the end, the rendering loop ends up not doing calculations.
  *
- * - UI
+ * - UI - EVENT HANDLER
  *     - handle all events
  * - PHYSICS UPDATE
  *     - consume flags set by in the UI code
  *     - update animations
+ *     - dCB curves:
+ *          - update dCB curves by modifying control points
+ *          - do not find points on curve unless I need that for physics stuff like
+ *            collisions
  * - RENDERING
  *     - GAME ART
  *         - draw current animation state to the game texture
  *         - most of the rendering code goes here
+ *         - dCB curves:
+ *              - find points on curve using control points
+ *              - use a single buffer to store all curves:
+ *                  - buffer is size of one curve
+ *                  - loop:
+ *                      - go to next curve
+ *                      - calc points, write to buffer overwriting previous curve
+ *                      - render what's in the curve buffer
  *     - OS WINDOW
  *         - just a little bit of rendering code
  *           to get that game texture into the OS window

@@ -94,8 +94,8 @@ WindowInfo::WindowInfo(int argc, char* argv[])
     // Set defaults
     x = 50;                                             // Default x
     y = 50;                                             // Default y
-    w = 2*GameArt::rect.w;                              // Default w
-    h = 2*GameArt::rect.h;                              // Default h
+    w = 1*GameArt::rect.w;                              // Default w
+    h = 1*GameArt::rect.h;                              // Default h
 
     // Overwrite with values, if provided
     if(argc>1) x = atoi(argv[1]);
@@ -314,7 +314,7 @@ namespace BezierCurves
     // FUNCTIONS
     ////////////
     void calc_Bmatrix(void);                    // Bmatrix never changes! Call this once (during setup).
-
+    void dCB_curve_points(SDL_FPoint*, SDL_FPoint*); // Calc points on dCB curve using Bmatrix
 }
 
 void BezierCurves::calc_Bmatrix(void)
@@ -353,6 +353,22 @@ void BezierCurves::calc_Bmatrix(void)
                     Bmatrix[i][k] += Pmatrix[i][j]*Tmatrix[j][k];
                 }
             }
+        }
+    }
+}
+
+void BezierCurves::dCB_curve_points(SDL_FPoint* control_points, SDL_FPoint* points)
+{ // Calculate K dCB curve points
+    // Matrix multiplication: control_points x Bmatrix
+    //                    (1 rows x NC cols) x (NC rows x K cols)
+    //                            {P0,P1,P2} x B = curve
+    for (int k=0; k<K; k++)                 // k : column of B matrix
+    { // Iterate over columns of Bmatrix
+        points[k]=SDL_FPoint{0,0};          // Clear out old value for kth point on dCB curve
+        for (int j=0; j<NC; j++)            // j : walk control points and walk the kth col of B
+        { // Find kth point = control_points[j]*B[j][k]
+            points[k].x += control_points[j].x*Bmatrix[j][k];
+            points[k].y += control_points[j].y*Bmatrix[j][k];
         }
     }
 }
@@ -1042,6 +1058,11 @@ int main(int argc, char* argv[])
         { // Method 2: dCB curve is matrix product of control points and pre-computed B matrix (NC rows x K cols)
             using namespace BezierCurves;
             // Calculate points on the dCB curve from the Bmatrix and the control points
+
+            // TODO: move control points creation/update to the physics loop
+            //       First make a pool of memory for many control_points[3] arrays
+            //       Then I will have larger scope for control points so that
+            //       physics and renderer can both see control points.
             SDL_FPoint control_points[NC];              // dCB control points
             { // Generate three random control points
                 for(int i=0; i<NC; i++)
@@ -1063,32 +1084,23 @@ int main(int argc, char* argv[])
                     control_points[i].y += OFFSET_Y;
                 }
             }
+
+            // Below here stays in the rendering loop!
             SDL_FPoint points[K];                       // dCB curve points
-            { // Calculate points = control_points*Bmatrix
-                // Matrix multiplication: {P0,P1,P2} * B = curve // (1 rows x NC cols) x (NC rows x K cols)
-                for (int k=0; k<K; k++)                 // k : column of B matrix
-                { // Iterate over columns of Bmatrix
-                    points[k]=SDL_FPoint{0,0};          // Clear out old value for kth point on dCB curve
-                    for (int j=0; j<NC; j++)            // j : walk control points and walk the kth col of B
-                    { // Find kth point = control_points[j]*B[j][k]
-                        points[k].x += control_points[j].x*Bmatrix[j][k];
-                        points[k].y += control_points[j].y*Bmatrix[j][k];
-                    }
+            dCB_curve_points(control_points, points);   // Fill arg points with dCB curve points
+            { // Render as lines in foreground color
+                { // Use foreground color
+                    SDL_Color c = Colors::list[fgnd_color];
+                    SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
                 }
-                { // Render as lines in foreground color
-                    { // Use foreground color
-                        SDL_Color c = Colors::list[fgnd_color];
-                        SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
-                    }
-                    SDL_RenderDrawLinesF(ren,points,K);
+                SDL_RenderDrawLinesF(ren,points,K);
+            }
+            { // Render as lime points
+                { // Use lime color
+                    SDL_Color c = Colors::lime;
+                    SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
                 }
-                { // Render as lime points
-                    { // Use lime color
-                        SDL_Color c = Colors::lime;
-                        SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
-                    }
-                    SDL_RenderDrawPointsF(ren, points, K);
-                }
+                SDL_RenderDrawPointsF(ren, points, K);
             }
         }
         if(  show_overlay  )

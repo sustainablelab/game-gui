@@ -886,14 +886,18 @@ int main(int argc, char* argv[])
         {
             constexpr int ORDER = 2;                    // 2nd-order dCB curve
             constexpr int NC = ORDER+1;                 // 2nd-order has 3 control points
-            SDL_FPoint P0 = {.x=-0.5,.y=0.6};
-            SDL_FPoint P1 = {.x=0,  .y=0};
-            SDL_FPoint P2 = {.x=0.4, .y=0.5};
-            SDL_FPoint control_points[NC] = {P0, P1, P2};
+            SDL_FPoint control_points[NC];              // dCB control points
+            // Pick three random points
+            for(int i=0; i<NC; i++)
+            {
+                constexpr float MAX = static_cast<float>(RAND_MAX);
+                control_points[i].x = (std::rand()/MAX) - 0.5;
+                control_points[i].y = (std::rand()/MAX) - 0.5;
+            }
             // Scale and offset points:
             constexpr int SCALE = GameArt::rect.w/2;
             constexpr float OFFSET_X = GameArt::rect.w/2;
-            constexpr float OFFSET_Y = GameArt::rect.h/10;
+            constexpr float OFFSET_Y = GameArt::rect.h/2;
             for(int i=0;i<NC;i++)
             {
                 control_points[i].x *= SCALE;
@@ -953,18 +957,17 @@ int main(int argc, char* argv[])
                 }
                 SDL_RenderDrawPointsF(ren,control_points,NC);
             }
-            if (0) // Draw a quick throwaway rectangle to get going
-            { // Draw a filled rect
+            if (show_overlay) // Draw a debug bounding box
+            { // Draw a transparent rect in green
                 { // Use foreground color
-                    SDL_Color c = Colors::list[fgnd_color];
-                    SDL_SetRenderDrawColor(ren, c.r, c.g, c.b, c.a);
+                    SDL_SetRenderDrawColor(ren, 255>>2, 255, 255>>2, 255>>1);
                 }
-                SDL_Rect rect = {
-                    .x=GameArt::rect.w/2,
-                    .y=GameArt::rect.h/2,
-                    .w=10, .h=10
-                };
-                SDL_RenderFillRect(ren, &rect);
+                constexpr float W = SCALE;
+                constexpr float H = SCALE;
+                constexpr float x_left = OFFSET_X - W/2;
+                constexpr float y_top = OFFSET_Y - H/2;
+                SDL_FRect rect = { .x=x_left, .y=y_top, .w=W, .h=H };
+                SDL_RenderDrawRectF(ren, &rect);
             }
         }
         if(  show_overlay  )

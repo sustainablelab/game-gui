@@ -12,9 +12,9 @@ namespace GameDemo
     //////////////////////////
 
     constexpr bool RAINBOW_STATIC = false;              // Just random colors
-    constexpr bool RAT_CIRCLE = false;                  // FAVORITE: Rational parametrization of a circle
+    constexpr bool RAT_CIRCLE = true;                   // FAVORITE: Rational parametrization of a circle
     constexpr bool BLOB = false;                        // Be an ameoba-plasma-ball-thing (uses RatCircle)
-    constexpr bool GEN_CURVE = true;                    // Generate a curve with dCB quadratics
+    constexpr bool GEN_CURVE = false;                   // Generate a curve with dCB quadratics
     constexpr bool FIT_CURVE = false;                   // Fit a curve with dCB quadratics
 }
 
@@ -386,7 +386,7 @@ int main(int argc, char* argv[])
     std::srand(std::time(0));                           // Seed RNG with current time
     WindowInfo wI(argc, argv);
     if (DEBUG) printf("Window info: %d x %d at %d,%d\n", wI.w, wI.h, wI.x, wI.y);
-    if (DEBUG) printf("Number of colors in palette: %ld\n", sizeof(Colors::list)/sizeof(SDL_Color));
+    if (DEBUG) printf("Number of colors in palette: %d\n", (int)(sizeof(Colors::list)/sizeof(SDL_Color)));
     { // SDL Setup
         SDL_Init(SDL_INIT_VIDEO|SDL_INIT_AUDIO);
         win = SDL_CreateWindow(argv[0], wI.x, wI.y, wI.w, wI.h, wI.flags);
@@ -432,8 +432,14 @@ int main(int argc, char* argv[])
     bool flag_right{};                                  // Pressed key for right
 
     // RAT_CIRCLE demo -- globals
+    // Spinner struct is 32 bytes:
+    if(DEBUG) printf("%d: sizeof(RatCircle::Spinner): %d\n", __LINE__, (int)sizeof(RatCircle::Spinner));
     RatCircle::Spinner *ali, *bob;                      // Example code for individual spinners
-    constexpr int NSPIN = 1<<12;                        // Number of spinners on screen: BIG number
+    // Each spinner is an 8 byte pointer plus 32 bytes of data
+    // (8+32)*pow(2,12) = 163840.0 <--- WHY DOES THAT TERMINATE ON MY LAPTOP?
+    // NSPIN: Number of spinners on screen
+    /* constexpr int NSPIN = 1<<12;                        // Max on my 32GB Linux desktop */
+    constexpr int NSPIN = 1<<9;                         // Max on my 8GB Windows laptop:
     constexpr int NTRAIL = 25;                          // Number of pixels in spinner trail : 1 - 25
     RatCircle::Spinner *spinners[NSPIN];                // Just a giant array of pointers
 
@@ -458,6 +464,30 @@ int main(int argc, char* argv[])
             uint16_t p = std::rand() % RatCircle::MAX_NUM_POINTS; // Initial phase
             spinners[i] = new RatCircle::Spinner(x,y,r,s,p);
         }
+        // Each pointer to a spinner is 8 bytes:
+        if(DEBUG) printf("%d: sizeof(spinners[0]): %d bytes (pointer)\n", __LINE__, (int)sizeof(spinners[0]));
+        // And each spinner that it points to is 32 bytes:
+        if(DEBUG) printf("%d: sizeof(*spinners[0]): %d bytes (data)\n", __LINE__, (int)sizeof(*spinners[0]));
+        if(DEBUG) printf("%d: NSPIN: %d\n", __LINE__, NSPIN);
+        // Expect sizeof(spinners) is 8*NSPIN (8 is size of pointer)
+        if(DEBUG) printf("%d: sizeof(spinners): %d bytes (%d bytes * %d spinners)\n",
+                __LINE__, (int)sizeof(spinners),
+                (int)sizeof(spinners[0]), NSPIN
+                );
+        if(DEBUG) printf("%d: data for all spinners: %d bytes (%d bytes * %d spinners)\n",
+                __LINE__, (int)sizeof(*spinners[0])*NSPIN,
+                (int)sizeof(*spinners[0]), NSPIN
+                );
+        // Expect RAM consumed is 8*NSPIN (all pointers to spinners) + 32*NSPIN (all spinners)
+        // If NSPIN = 512:
+        // consume 4096 bytes (4K) of pointers
+        // consume 16384 bytes (16K) of data
+        // If NSPIN = 4096:
+        // consume 32768 bytes (32K) of pointers
+        // consume 131072 bytes (131K) of data
+        if(DEBUG) printf("%d: total spinners memory footprint: %d bytes\n",
+                __LINE__, (int)(sizeof(spinners[0]) + sizeof(*spinners[0]))*NSPIN
+                );
         if (0)
         { // Example spawning individuals deliberately
             ali = new RatCircle::Spinner(
@@ -558,7 +588,7 @@ int main(int argc, char* argv[])
                             is_fullscreen = !is_fullscreen;
                             if (is_fullscreen)
                             { // Go fullscreen
-                                SDL_SetWindowFullscreen(win, SDL_WINDOW_FULLSCREEN);
+                                SDL_SetWindowFullscreen(win, SDL_WINDOW_FULLSCREEN_DESKTOP);
                             }
                             else
                             { // Go back to windowed

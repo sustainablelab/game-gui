@@ -438,8 +438,8 @@ int main(int argc, char* argv[])
     // Each spinner is an 8 byte pointer plus 32 bytes of data
     // (8+32)*pow(2,12) = 163840.0 <--- WHY DOES THAT TERMINATE ON MY LAPTOP?
     // NSPIN: Number of spinners on screen
-    /* constexpr int NSPIN = 1<<12;                        // Max on my 32GB Linux desktop */
-    constexpr int NSPIN = 1<<9;                         // Max on my 8GB Windows laptop:
+    constexpr int NSPIN = 1<<12;                        // Max on my 32GB Linux desktop
+    /* constexpr int NSPIN = 1<<9;                         // Max on my 8GB Windows laptop: */
     constexpr int NTRAIL = 25;                          // Number of pixels in spinner trail : 1 - 25
     RatCircle::Spinner *spinners[NSPIN];                // Just a giant array of pointers
 

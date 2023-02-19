@@ -11,7 +11,10 @@ LDLIBS := `pkg-config --libs sdl2`
 
 default-target: $(EXE)
 
-$(EXE): $(SRC)
+build:
+	@mkdir -p build
+
+$(EXE): $(SRC) | build
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDLIBS)
 
 .PHONY: $(HEADER_LIST)
